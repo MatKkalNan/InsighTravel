@@ -1,0 +1,65 @@
+[
+  {
+    "source": "Amadeus",
+    "name": "Holiday Inn Stes Odori Park By Ihg",
+    "price": "JPY 101700",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Holiday Inn Stes Odori Park By Ihg hotel"
+  },
+  {
+    "source": "Amadeus",
+    "name": "Holiday Inn Sapporo Susukino By Ihg",
+    "price": "JPY 108775",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Holiday Inn Sapporo Susukino By Ihg hotel"
+  },
+  {
+    "source": "Amadeus",
+    "name": "Grand Mercure Sapporo Odori Park",
+    "price": "JPY 140250",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Grand Mercure Sapporo Odori Park hotel"
+  },
+  {
+    "source": "Amadeus",
+    "name": "Mercure Sapporo",
+    "price": "JPY 142875",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Mercure Sapporo hotel"
+  },
+  {
+    "source": "Amadeus",
+    "name": "Lamp Light Books Hotel Sapporo",
+    "price": "JPY 104733",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Lamp Light Books Hotel Sapporo hotel"
+  },
+  {
+    "source": "Amadeus",
+    "name": "Koko Hotel Sapporo Susukino",
+    "price": "JPY 142380",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Koko Hotel Sapporo Susukino hotel"
+  },
+  {
+    "source": "Amadeus",
+    "name": "Richmond Hotel Sapporo Odori",
+    "price": "JPY 109000",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Richmond Hotel Sapporo Odori hotel"
+  },
+  {
+    "source": "Amadeus",
+    "name": "Granbell Hotel Susukino",
+    "price": "JPY 171000",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Granbell Hotel Susukino hotel"
+  },
+  {
+    "source": "Amadeus",
+    "name": "Sapporo Prince Hotel",
+    "price": "JPY 115549",
+    "rating": "정보 없음",
+    "link": "https://www.google.com/search?q=Sapporo Prince Hotel hotel"
+  }
+]
