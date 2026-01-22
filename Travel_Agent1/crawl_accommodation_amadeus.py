@@ -60,23 +60,42 @@ def translate_to_english(text):
     return text
 
 def validate_dates(check_in, check_out):
-    """ [NEW] 날짜 유효성 검사 및 자동 보정 """
+    """ [연도만 개선] 날짜 유효성 검사 및 자동 보정 """
+    def safe_replace_year(d, year):
+        """윤년(2/29) 같은 케이스 때문에 year 바꿀 때 터질 수 있어서 안전하게 처리"""
+        try:
+            return d.replace(year=year)
+        except ValueError:
+            # 2/29 -> 2/28로 보정
+            if d.month == 2 and d.day == 29:
+                return d.replace(year=year, day=28)
+            raise
+
     try:
         today = datetime.now().date()
         in_date = datetime.strptime(check_in, "%Y-%m-%d").date()
         out_date = datetime.strptime(check_out, "%Y-%m-%d").date()
 
-        # 1. 과거 날짜인 경우 -> 내년으로 변경
         if in_date < today:
-            print(f"⚠️ [경고] 입력된 날짜({in_date})가 과거입니다. 1년 뒤로 자동 조정합니다.")
-            in_date = in_date.replace(year=today.year + 1)
-            out_date = out_date.replace(year=today.year + 1)
-        
-        # 2. 체크아웃이 체크인보다 빠르거나 같을 때 -> 체크인 + 2일
+            # 1) 올해로 바꿔봤을 때 아직 미래면 올해 채택
+            candidate_this_year = safe_replace_year(in_date, today.year)
+
+            if candidate_this_year >= today:
+                target_year = today.year
+            else:
+                # 2) 올해로 바꿔도 과거면 내년 채택
+                target_year = today.year + 1
+
+            print(f"⚠️ [경고] 입력된 날짜({in_date})가 과거입니다. 연도를 {target_year}년으로 자동 조정합니다.")
+            in_date = safe_replace_year(in_date, target_year)
+            out_date = safe_replace_year(out_date, target_year)
+
+        # 2. 체크아웃이 체크인보다 빠르거나 같을 때 -> 체크인 + 2일 (기존 그대로)
         if out_date <= in_date:
-             out_date = in_date + timedelta(days=2)
+            out_date = in_date + timedelta(days=2)
 
         return in_date.strftime("%Y-%m-%d"), out_date.strftime("%Y-%m-%d")
+
     except Exception as e:
         print(f"⚠️ 날짜 변환 중 오류({e}). 기본값(내일)으로 설정합니다.")
         tomorrow = datetime.now().date() + timedelta(days=1)
