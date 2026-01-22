@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>여행 에이전트 챗봇</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f7;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      color: #222;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      height: 100%;
+    }
+
+    .chat-panel {
+      flex: 2;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #ddd;
+      background: #ffffff;
+    }
+
+    .chat-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      font-weight: 600;
+      font-size: 15px;
+      background: #fafafa;
+    }
+
+    .chat-log {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      background: #f7f8fa;
+    }
+
+    .message {
+      margin-bottom: 12px;
+      max-width: 85%;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: #007aff;
+      color: #fff;
+      border-radius: 16px 16px 2px 16px;
+      padding: 8px 12px;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      background: #ffffff;
+      border-radius: 16px 16px 16px 2px;
+      padding: 8px 12px;
+      border: 1px solid #e1e1e1;
+    }
+
+    .input-panel {
+      padding: 10px;
+      border-top: 1px solid #eee;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #user-input {
+      width: 100%;
+      min-height: 60px;
+      max-height: 120px;
+      resize: vertical;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    .input-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .send-btn {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: none;
+      font-size: 13px;
+      cursor: pointer;
+      background: #007aff;
+      color: white;
+      white-space: nowrap;
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .debug-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #fdfdfd;
+    }
+
+    .debug-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+      font-weight: 600;
+      background: #fafafa;
+    }
+
+    .debug-body {
+      padding: 10px 14px;
+      font-size: 12px;
+      overflow-y: auto;
+    }
+
+    .debug-row {
+      margin-bottom: 8px;
+    }
+
+    .debug-label {
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    pre {
+      background: #f4f4f4;
+      padding: 8px;
+      border-radius: 6px;
+      max-height: 200px;
+      overflow: auto;
+      font-size: 11px;
+    }
+
+    .stage-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #e5f3ff;
+      color: #0060c9;
+    }
+
+    .route-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #f5e9ff;
+      color: #6b21a8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 채팅 영역 -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        ✈️ 여행 에이전트
+      </div>
+      <div id="chat-log" class="chat-log"></div>
+      <div class="input-panel">
+        <textarea
+          id="user-input"
+          placeholder="예시: 3월에 친구랑 3박 4일 오사카 여행 가고 싶은데 뭐부터 정해야 할까?"
+        ></textarea>
+        <div class="input-row">
+          <div class="hint">
+            엔터: 전송 · 쉬프트+엔터: 줄바꿈
+          </div>
+          <button id="send-btn" class="send-btn" onclick="sendMessage()">
+            보내기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 디버그/플랜 영역 -->
+    <div class="debug-panel">
+      <div class="debug-header">
+        🔍 Planner / Tool 상태
+      </div>
+      <div class="debug-body">
+        <div class="debug-row">
+          <span class="debug-label">route:</span>
+          <span id="debug-route" class="route-pill">-</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">trip_stage:</span>
+          <span id="debug-stage" class="stage-pill">-</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">plan:</span>
+        </div>
+        <pre id="plan-json">{}</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- [NEW] 세션 ID 생성 (브라우저별 1개 유지) ---
+    let sessionId = localStorage.getItem("travel_session_id");
+    if (!sessionId) {
+      sessionId = "sess-" + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem("travel_session_id", sessionId);
+    }
+
+    // 최근 대화를 서버로 넘기기 위한 메모리
+    let messages = [];
+
+    function addMessage(role, text) {
+      const chatLog = document.getElementById("chat-log");
+      const div = document.createElement("div");
+      div.classList.add("message", role);
+      div.textContent = text;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function setDebugInfo(route, plan) {
+      const routeEl = document.getElementById("debug-route");
+      const stageEl = document.getElementById("debug-stage");
+      const planEl = document.getElementById("plan-json");
+
+      routeEl.textContent = route || "-";
+      const stage = (plan && plan.trip_stage) || "ideation";
+      stageEl.textContent = stage;
+
+      try {
+        planEl.textContent = JSON.stringify(plan || {}, null, 2);
+      } catch (e) {
+        planEl.textContent = "{}";
+      }
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("user-input");
+      const sendBtn = document.getElementById("send-btn");
+      const text = input.value.trim();
+      if (!text) return;
+
+      // 화면에 사용자 메시지 추가
+      addMessage("user", text);
+      messages.push({ role: "user", text });
+
+      // 최근 6턴만 context로 보냄 (모든 tool이 공유)
+      const contextText = messages
+        .slice(-6)
+        .map((m) => `${m.role}: ${m.text}`)
+        .join("\n");
+
+      // 입력창 비우고 버튼 비활성화
+      input.value = "";
+      sendBtn.disabled = true;
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,     // 세션 ID 전달 (현재는 서버에서 옵션용)
+            message: text,
+            context: contextText,      // 모든 tool이 알 수 있는 context
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Server error: " + res.status);
+        }
+
+        const data = await res.json();
+        const reply = data.reply || "";
+        const route = data.route || "-";
+        const plan = data.plan || {};
+
+        // 화면에 assistant 메시지 추가
+        addMessage("assistant", reply);
+        messages.push({ role: "assistant", text: reply });
+
+        // 디버그 정보 업데이트
+        setDebugInfo(route, plan);
+      } catch (err) {
+        console.error(err);
+        const errMsg = "오류가 발생했어요. 서버 상태를 확인해 주세요.";
+        addMessage("assistant", errMsg);
+        messages.push({ role: "assistant", text: errMsg });
+      } finally {
+        sendBtn.disabled = false;
+        document.getElementById("user-input").focus();
+      }
+    }
+
+    // 엔터: 전송, Shift+Enter: 줄바꿈
+    document.getElementById("user-input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>
