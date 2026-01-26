@@ -2,11 +2,14 @@ import os
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+# [변경] 프롬프트 모듈 임포트
+from prompts.gemini_prompts import GEMINI_CORE_SYSTEM, get_flight_summary_prompt
+
 load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# 1. 모델 설정 (Gemini 2.5 Flash 고정)
+# 1. 모델 설정 (Gemini 2.5 Flash 고정 - 기존 유지)
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
     
@@ -21,7 +24,7 @@ else:
     default_model = None
     print("⚠️ GOOGLE_API_KEY가 없습니다. Gemini 기능이 제한됩니다.")
 
-def call_gemini(system_prompt: str, user_prompt: str, temperature: float = 0.4) -> str:
+def call_gemini(system_role: str, user_data_prompt: str, temperature: float = 0.4) -> str:
     """
     OpenAI 스타일의 입력을 받아 Gemini로 처리하는 범용 함수
     """
@@ -29,8 +32,8 @@ def call_gemini(system_prompt: str, user_prompt: str, temperature: float = 0.4) 
         return "Gemini API Key가 설정되지 않았거나 모델을 불러올 수 없습니다."
 
     try:
-        # Gemini는 System Prompt를 별도 파라미터로 받거나 프롬프트 앞단에 붙입니다.
-        combined_prompt = f"{system_prompt}\n\n[User Context/Message]\n{user_prompt}"
+        # [변경] GEMINI_CORE_SYSTEM(기본 페르소나) + system_role(현재 역할) + user_data_prompt(데이터) 결합
+        combined_prompt = f"{GEMINI_CORE_SYSTEM}\n\n[Current Role]\n{system_role}\n\n[Data & Request]\n{user_data_prompt}"
         
         config = genai.GenerationConfig(temperature=temperature)
         response = default_model.generate_content(combined_prompt, generation_config=config)
@@ -46,20 +49,8 @@ def summarize_flight_data(user_query, flight_raw_data):
     if not flight_raw_data or "찾을 수 없습니다" in flight_raw_data:
         return flight_raw_data
 
-    system_prompt = "당신은 유능한 여행 항공권 컨설턴트입니다."
-    user_prompt = f"""
-    아래 항공권 데이터를 분석해서 사용자 질문에 맞춰 가장 추천할 만한 옵션 3가지를 꼽아주고 이유를 설명해 줘.
+    # [변경] 하드코딩 제거 -> 프롬프트 모듈 사용
+    user_prompt = get_flight_summary_prompt(user_query, flight_raw_data)
     
-    [사용자 질문]
-    {user_query}
-
-    [항공권 데이터]
-    {flight_raw_data}
-
-    [규칙]
-    1. 가격, 시간, 경유 여부를 종합해 '최고의 가성비', '최단 시간' 등의 타이틀을 붙여줘.
-    2. 데이터에 있는 예매 링크(URL)는 절대 변형하지 말고 그대로 출력해.
-    3. 말투는 정중하고 친절하게.
-    """
-    
-    return call_gemini(system_prompt, user_prompt, temperature=0.3)
+    # "항공권 컨설턴트"라는 역할만 부여 (구체적 지시는 프롬프트 파일에 있음)
+    return call_gemini("당신은 '항공권 전문 분석가'입니다.", user_prompt, temperature=0.3)

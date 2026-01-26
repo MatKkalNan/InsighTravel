@@ -1,4 +1,3 @@
-# tools.py
 import os
 import json
 from datetime import datetime
@@ -15,6 +14,15 @@ from flight_service import search_flight_offers
 
 # [Gemini 서비스 임포트]
 from gemini_service import call_gemini, summarize_flight_data
+
+# [변경] 프롬프트 모듈 임포트
+from prompts.tools_prompts import (
+    get_ideation_prompt,
+    ITINERARY_PARAM_SYSTEM, get_itinerary_prompt,
+    get_flight_param_system,
+    STAY_PARAM_SYSTEM, get_stay_prompt,
+    FOOD_SPOT_PARAM_SYSTEM, get_food_spot_prompt
+)
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -45,17 +53,9 @@ def extract_params_with_openai(system_prompt: str, user_message: str, context: s
 # 1. 여행지 아이데이션 (Gemini 창작)
 # -------------------------------------------------------------------
 def run_trip_ideation_tool(user_message: str, context: str) -> str:
-    system_prompt = "당신은 창의적인 여행 큐레이터입니다."
-    user_prompt = f"""
-    [대화 맥락]
-    {context}
-    
-    [사용자 요청]
-    {user_message}
-    
-    사용자의 취향, 예산, 계절감을 고려해 여행지 3~5곳을 추천하고, 그 이유를 매력적으로 설명해 주세요.
-    """
-    return call_gemini(system_prompt, user_prompt, temperature=0.7)
+    # [변경] 하드코딩 제거
+    user_prompt = get_ideation_prompt(user_message, context)
+    return call_gemini("당신은 창의적인 '여행 큐레이터'입니다.", user_prompt, temperature=0.7)
 
 
 # -------------------------------------------------------------------
@@ -64,11 +64,8 @@ def run_trip_ideation_tool(user_message: str, context: str) -> str:
 def run_itinerary_planner_tool(user_message: str, context: str) -> str:
     print("RUNNING: Itinerary Planner")
     
-    param_prompt = """
-    사용자의 요청에서 'destination'과 'is_korea'(한국 여부, boolean)를 추출하세요.
-    JSON 형식으로만 출력: {"destination": "Jeju", "is_korea": true}
-    """
-    params = extract_params_with_openai(param_prompt, user_message, context)
+    # [변경] 하드코딩 제거 -> 프롬프트 모듈 사용
+    params = extract_params_with_openai(ITINERARY_PARAM_SYSTEM, user_message, context)
     destination = params.get("destination", "여행지")
     is_korea = params.get("is_korea", False)
 
@@ -91,14 +88,9 @@ def run_itinerary_planner_tool(user_message: str, context: str) -> str:
             for p in n_spots[:5]: places_info += f"- (명소) {p['title']}\n"
             for p in n_food[:5]: places_info += f"- (맛집) {p['title']}\n"
 
-    system_prompt = "당신은 전문 여행 플래너입니다. 동선과 장소의 매력을 고려하여 완벽한 일정을 계획합니다."
-    user_prompt = f"""
-    [사용자 요청] {user_message}
-    [검색된 장소 데이터] {places_info}
-    
-    위 데이터를 활용하여 실현 가능한 일정을 짜주세요. 데이터에 있는 장소 이름을 우선적으로 사용하세요.
-    """
-    return call_gemini(system_prompt, user_prompt, temperature=0.4)
+    # [변경] 하드코딩 제거
+    user_prompt = get_itinerary_prompt(user_message, places_info)
+    return call_gemini("당신은 꼼꼼한 '여행 일정 플래너'입니다.", user_prompt, temperature=0.4)
 
 
 # -------------------------------------------------------------------
@@ -107,37 +99,41 @@ def run_itinerary_planner_tool(user_message: str, context: str) -> str:
 def run_flight_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Flight Search")
     
-    # 현재 연도(2026)를 명시하여 과거 날짜 검색 방지
-    current_year = datetime.now().year 
-    
-    param_prompt = f"""
-    항공권 파라미터를 추출하세요. 현재 연도는 {current_year}년입니다.
-    1. origin, destination은 반드시 IATA 공항 코드(3자리 대문자, 예: ICN, PVG, NRT)로 변환하세요.
-    2. departureDate, returnDate는 반드시 YYYY-MM-DD 형식이어야 합니다.
-    3. 사용자가 "3월"이라고만 하면 {current_year}-03-15 정도로 추측하세요.
-    JSON 형식: {{"origin": "ICN", "destination": "PVG", "departureDate": "YYYY-MM-DD", "return_date": "YYYY-MM-DD" or null}}
-    """
+    # 1. GPT: 파라미터 추출 (좌석, 직항 여부 등 포함)
+    param_prompt = get_flight_param_system()
     params = extract_params_with_openai(param_prompt, user_message, context)
     
     origin = params.get("origin", "ICN")
     dest = params.get("destination")
     dep_date = params.get("departureDate")
     ret_date = params.get("return_date")
-
+    
+    # 추가 옵션 추출
+    travel_class = params.get("travelClass")  # 예: ECONOMY, BUSINESS
+    non_stop = params.get("nonStop")          # 예: True/False
+    
+    # 필수 파라미터 검증
     if not dest or not dep_date:
-        return "출발지, 목적지 또는 날짜 정보가 부족하여 항공권을 검색할 수 없습니다. (예: 3월 상하이 항공권 알려줘)"
+        return "출발지와 목적지, 날짜를 정확히 알려주시면 항공권을 찾아드릴게요."
 
-    print(f"✈️ API 호출 파라미터: {origin} -> {dest}, 날짜: {dep_date}")
+    print(f"✈️ API 호출 파라미터: {origin}->{dest} ({dep_date}), 좌석:{travel_class}, 직항:{non_stop}")
 
+    # 2. API: 데이터 수집 (옵션 전달)
     try:
-        # flight_service.py의 검색 함수 호출
-        flight_data = search_flight_offers(origin, dest, dep_date, ret_date)
+        # flight_service.py의 search_flight_offers 함수는 **kwargs로 옵션을 받음
+        flight_data = search_flight_offers(
+            origin=origin, 
+            destination=dest, 
+            date=dep_date, 
+            return_date=ret_date,
+            travelClass=travel_class, # 좌석 등급 전달
+            nonStop=non_stop          # 직항 여부 전달
+        )
     except Exception as e:
-        flight_data = f"항공권 검색 중 API 오류가 발생했습니다: {str(e)}"
+        flight_data = f"항공권 검색 중 시스템 오류가 발생했습니다: {e}"
 
-    # Gemini를 통해 최종 답변 작성
+    # 3. Gemini: 요약 (gemini_service 내부 함수 사용)
     return summarize_flight_data(user_message, flight_data)
-
 
 # -------------------------------------------------------------------
 # 4. 숙소 검색
@@ -145,11 +141,8 @@ def run_flight_search_tool(user_message: str, context: str) -> str:
 def run_stay_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Stay Search")
     
-    param_prompt = """
-    추출: destination, check_in(YYYY-MM-DD), check_out, guests(int).
-    JSON: {"destination": "Seoul", "check_in": "2026-05-01", "check_out": "2026-05-05", "guests": 2}
-    """
-    params = extract_params_with_openai(param_prompt, user_message, context)
+    # [변경] 하드코딩 제거
+    params = extract_params_with_openai(STAY_PARAM_SYSTEM, user_message, context)
     
     accom_data = []
     if params.get("destination"):
@@ -163,7 +156,9 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     else:
         raw_text = "조건에 맞는 숙소를 찾지 못했습니다."
 
-    return call_gemini("당신은 호텔 컨시어지입니다.", f"사용자 요청: {user_message}\n호텔 리스트:\n{raw_text}")
+    # [변경] 하드코딩 제거
+    user_prompt = get_stay_prompt(user_message, raw_text)
+    return call_gemini("당신은 친절한 '호텔 컨시어지'입니다.", user_prompt)
 
 
 # -------------------------------------------------------------------
@@ -172,11 +167,8 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
 def run_food_spot_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Food/Spot Search")
     
-    param_prompt = """
-    추출 'query' (검색어)와 'place_type' (restaurant 또는 tourist_attraction).
-    JSON: {"query": "상하이 맛집", "place_type": "restaurant"}
-    """
-    params = extract_params_with_openai(param_prompt, user_message, context)
+    # [변경] 하드코딩 제거
+    params = extract_params_with_openai(FOOD_SPOT_PARAM_SYSTEM, user_message, context)
     query = params.get("query", "")
     
     g_results = search_places_google(query, params.get("place_type"), min_rating=4.0)
@@ -188,7 +180,9 @@ def run_food_spot_search_tool(user_message: str, context: str) -> str:
         n_results = search_places_naver(query)
         data_text = "[Naver Maps]\n" + "\n".join([f"{p['title']} ({p['category']})" for p in n_results])
 
-    return call_gemini("당신은 미식 가이드입니다.", f"요청: {user_message}\n데이터:\n{data_text}")
+    # [변경] 하드코딩 제거
+    user_prompt = get_food_spot_prompt(user_message, data_text)
+    return call_gemini("당신은 '현지 미식 가이드'입니다.", user_prompt)
 
 
 # -------------------------------------------------------------------
@@ -211,10 +205,10 @@ def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
     elif tool == "food_spot_search":
         return run_food_spot_search_tool(user_message, context)
     elif tool == "local_guide":
-        return call_gemini("현지 가이드입니다.", f"컨텍스트: {context}\n질문: {user_message}")
+        return call_gemini("당신은 '현지 가이드'입니다.", f"컨텍스트: {context}\n질문: {user_message}")
     elif tool == "budget_planner":
-        return call_gemini("예산 전문가입니다.", f"컨텍스트: {context}\n질문: {user_message}")
+        return call_gemini("당신은 '예산 전문가'입니다.", f"컨텍스트: {context}\n질문: {user_message}")
     elif tool == "out_of_scope":
-        return "여행과 관련된 질문을 해주시면 기쁘게 도와드릴 수 있습니다! 😊"
+        return "여행과 관련된 질문을 해주시면 기쁘게 도와드릴 수 있습니다!"
     else:
-        return call_gemini("친절한 여행 에이전트입니다.", f"{context}\nUser: {user_message}")
+        return call_gemini("당신은 '친절한 여행 에이전트'입니다.", f"{context}\nUser: {user_message}")

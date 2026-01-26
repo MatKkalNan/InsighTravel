@@ -379,7 +379,7 @@ def search_flight_offers(
     # 4. 상위 10개만 추출 (Top 10)
     final_top_10 = merged_list[:10]
     
-    lines = [f"🏆 **통합 최저가 항공권 TOP {len(final_top_10)}**"]
+    lines = [f"통합 최저가 항공권 TOP {len(final_top_10)}"]
     for i, item in enumerate(final_top_10):
         price_str = _fmt_price(item.price)
         lines.append(f"{i+1}. {item.text} | 💰 {price_str}")
