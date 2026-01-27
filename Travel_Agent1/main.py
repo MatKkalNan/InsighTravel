@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 from database import engine
 from models import Base
 
+from planner import plan_tasks
+from tools import run_tools_from_plan
+
 # [LangGraph 앱]
 from graph_app import chat_graph_app
 from graph_state import ChatState
@@ -32,15 +35,17 @@ app.add_middleware(
 )
 
 class ChatRequest(BaseModel):
+    session_id: Optional[str] = None
     message: str
     context: Optional[str] = ""
     # 프론트엔드에서 이전 대화 기록을 넘겨줄 경우
     history: Optional[List[Dict[str, str]]] = []
 
 class ChatResponse(BaseModel):
-    reply: str
-    plan: Dict[str, Any]
+    reply: str # 에이전트 최종 답변
+    plan: Dict[str, Any] # planner가 만든 계획
     trip_goal: Optional[Dict[str, Any]] = None
+    route: str # 사용된 주요 tool 이름
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
