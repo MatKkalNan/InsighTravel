@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-dotenv
+SQLAlchemy
+openai
+jinja2
+amadeus
+requests
+deep-translator
+google-generativeai
