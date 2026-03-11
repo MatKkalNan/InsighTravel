@@ -3,7 +3,8 @@ import os
 import re
 import json
 from datetime import datetime
-from typing import Dict, Any, List
+import amadeus
+from typing import Dict, Any, List, Optional
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -24,6 +25,8 @@ from gemini_service import call_gemini, summarize_flight_data
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# 마지막 항공권 검색 파라미터(대화 내 후속 질문에서 재사용)
+_LAST_FLIGHT_PARAMS: Dict[str, Any] = {}
 
 # -------------------------------------------------------------------
 # [Helper] OpenAI를 이용한 '정확한' 파라미터 추출
@@ -160,6 +163,7 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     JSON: {"destination": "Seoul", "check_in": "2026-05-01", "check_out": "2026-05-05", "guests": 2}
     """
     params = extract_params_with_openai(param_prompt, user_message, context)
+    print("[DEBUG] extract_search_params 결과:", params)
     
     destination = params.get("destination")
     check_in = params.get("check_in")
@@ -168,9 +172,11 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     
     if not destination:
         return "어느 지역의 숙소를 찾아드릴까요? 도시 이름을 말씀해 주세요."
-    
+
+    ## 다중 API 호출 및 데이터 통합
     all_accommodations = []
-    
+
+    # (A) TripAdvisor
     try:
         ta_results = search_tripadvisor(destination, check_in, check_out)
         if ta_results:
@@ -178,6 +184,7 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
             all_accommodations.extend(ta_results)
     except Exception as e: print(f"TripAdvisor Error: {e}")
 
+    # (B) Booking.com
     try:
         bk_results = search_booking(destination, check_in, check_out, guests)
         if bk_results:
@@ -185,6 +192,7 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
             all_accommodations.extend(bk_results)
     except Exception as e: print(f"Booking.com Error: {e}")
 
+    # (C) Amadeus
     try:
         am_results = search_amadeus(destination, check_in, check_out, guests)
         if am_results:
@@ -192,16 +200,18 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
             all_accommodations.extend(am_results)
     except Exception as e: print(f"Amadeus Error: {e}")
 
+    ## LLM에 전달할 텍스트 구성
     if all_accommodations:
-        raw_text = "\\n".join([
+        # 상위 10개 정도만 추려서 텍스트화
+        raw_text = "\n".join([
             f"- [{h.get('source')}] {h.get('name')}: {h.get('price')} (평점: {h.get('rating')})" 
             for h in all_accommodations[:10]
         ])
     else:
         raw_text = "현재 실시간 검색 결과가 없습니다. 일반적인 숙소 예약 팁을 알려주세요."
 
-    system_msg = "전문 호텔 컨시어지로서, 검색된 목록을 비교하여 최적의 숙소를 추천하세요."
-    user_msg = f"사용자 요청: {user_message}\\n\\n[통합 숙소 데이터]\\n{raw_text}"
+    system_msg = "전문 호텔 컨시어지로서, 검색된 목록을 비교하여 최적의 숙소를 추천하세요. 만약 데이터가 없다면 해당 지역의 숙소 예약 전략을 안내하세요."
+    user_msg = f"사용자 요청: {user_message}\n\n[통합 숙소 데이터]\n{raw_text}"
 
     return call_gemini(system_msg, user_msg)
 
