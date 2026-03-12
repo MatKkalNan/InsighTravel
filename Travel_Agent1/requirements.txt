@@ -8,3 +8,4 @@ amadeus
 requests
 deep-translator
 google-generativeai
+langgraph
