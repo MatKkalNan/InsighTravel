@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
   <meta charset="UTF-8" />
   <title>여행 에이전트 챗봇</title>
@@ -154,6 +155,11 @@
       max-height: 200px;
       overflow: auto;
       font-size: 11px;
+      white-space: pre-wrap;
+      /* 자동 줄바꿈 */
+      word-break: break-all;
+      /* 단어 중간에서도 줄바꿈 */
+      overflow-wrap: break-word;
     }
 
     .stage-pill {
@@ -177,6 +183,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <!-- 채팅 영역 -->
@@ -186,10 +193,7 @@
       </div>
       <div id="chat-log" class="chat-log"></div>
       <div class="input-panel">
-        <textarea
-          id="user-input"
-          placeholder="예시: 3월에 친구랑 3박 4일 오사카 여행 가고 싶은데 뭐부터 정해야 할까?"
-        ></textarea>
+        <textarea id="user-input" placeholder="예시: 3월에 친구랑 3박 4일 오사카 여행 가고 싶은데 뭐부터 정해야 할까?"></textarea>
         <div class="input-row">
           <div class="hint">
             엔터: 전송 · 쉬프트+엔터: 줄바꿈
@@ -325,4 +329,5 @@
     });
   </script>
 </body>
+
 </html>

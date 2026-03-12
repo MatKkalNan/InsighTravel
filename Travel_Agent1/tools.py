@@ -11,11 +11,13 @@ from openai import OpenAI
 
 # [서비스 모듈 임포트]
 from naver_service import search_places_naver
-from google_maps_service import search_places_google
+from google_maps_service import search_places_google, get_directions_info
 from crawl_accommodation_tripadvisor import search_hotels_with_retry as search_tripadvisor
 from crawl_accommodation_booking_com import search_hotels_api as search_booking
 from crawl_accommodation_amadeus import search_hotels_api as search_amadeus
-from flight_service import search_flight_offers  
+from flight_service import search_flight_offers
+from transportation_service import render_transport_options, render_transport_batch
+from event_service import search_events_serpapi
 
 # [Gemini 서비스 임포트]
 from gemini_service import call_gemini, summarize_flight_data
@@ -97,12 +99,17 @@ def run_itinerary_planner_tool(user_message: str, context: str) -> str:
             for p in n_spots[:5]: places_info += f"- (명소) {p['title']}\n"
             for p in n_food[:5]: places_info += f"- (맛집) {p['title']}\n"
 
-    system_prompt = "당신은 전문 여행 플래너입니다. 동선과 장소의 매력을 고려하여 완벽한 일정을 계획합니다."
+    system_prompt = "당신은 전문 여행 플래너이자 완벽한 길잡이입니다. 장소의 매력뿐만 아니라 이동 동선까지 치밀하게 계산합니다."
     user_prompt = f"""
     [사용자 요청] {user_message}
     [검색된 장소 데이터] {places_info}
     
-    위 데이터를 활용하여 실현 가능한 일정을 짜주세요. 데이터에 있는 장소 이름을 우선적으로 사용하세요.
+    위 데이터를 활용하여 실현 가능한 일정을 짜주세요. 
+    
+    🔥 [필수 포함 사항 - 교통 가이드] 🔥
+    단순히 장소만 나열하지 말고, **장소와 장소 사이의 이동 수단과 예상 소요 시간**을 반드시 구체적으로 명시해 주세요.
+    (예시: "📌 A 명소 관광 -> 🚶 도보 10분 -> 📌 B 식당", "📌 B 식당 -> 🚌 버스 15번 (약 20분 소요) -> 📌 C 카페")
+    동선이 꼬이지 않도록 구글 맵스 데이터를 기반으로 가장 효율적인 순서를 제안하세요.
     """
     return call_gemini(system_prompt, user_prompt, temperature=0.4)
 
@@ -165,10 +172,10 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     
     if not destination:
         return "어느 지역의 숙소를 찾아드릴까요? 도시 이름을 말씀해 주세요."
-    
+
     ## 다중 API 호출 및 데이터 통합
     all_accommodations = []
-    
+
     # (A) TripAdvisor
     try:
         ta_results = search_tripadvisor(destination, check_in, check_out)
@@ -233,13 +240,143 @@ def run_food_spot_search_tool(user_message: str, context: str) -> str:
 
     return call_gemini("당신은 미식 가이드입니다.", f"요청: {user_message}\n데이터:\n{data_text}")
 
+# -------------------------------------------------------------------
+# [NEW] 6. 축제/이벤트 검색
+# -------------------------------------------------------------------
+def run_event_search_tool(user_message: str, context: str) -> str:
+    print("RUNNING: Event/Festival Search")
+    
+    param_prompt = """
+    사용자의 요청에서 검색할 'query'(이벤트/축제 검색어, 주로 지역명 포함)를 추출하세요.
+    예: "파리 축제 찾아줘" -> {"query": "파리 축제"}
+    JSON 형식으로만 출력: {"query": "검색어"}
+    """
+    params = extract_params_with_openai(param_prompt, user_message, context)
+    query = params.get("query", "축제")
+    
+    events = search_events_serpapi(query)
+    
+    if events:
+        data_text = "[SerpAPI Event Data]\n"
+        for idx, ev in enumerate(events[:5], 1):
+            data_text += f"{idx}. {ev['title']} (날짜: {ev['date']}, 위치: {ev['address']})\n"
+            if ev['link']:
+                data_text += f"   - 링크: {ev['link']}\n"
+    else:
+        data_text = "현재 검색된 이벤트/축제 정보가 없습니다."
 
+    system_prompt = "당신은 현지 축제와 이벤트를 꿰뚫고 있는 여행 가이드입니다."
+    user_prompt = f"사용자 요청: {user_message}\n\n[이벤트 검색 데이터]\n{data_text}\n\n위 데이터를 바탕으로 사용자에게 흥미로운 축제나 이벤트를 추천해 주세요."
+    
+    return call_gemini(system_prompt, user_prompt, temperature=0.5)
+
+# -------------------------------------------------------------------
+# 7. [NEW] 현지 가이드 (실시간 교통 길찾기 연동 - 대중교통 & 자동차)
+# -------------------------------------------------------------------
+def run_local_guide_tool(user_message: str, context: str) -> str:
+    print("RUNNING: Local Guide (With Live Transit & Driving)")
+    
+    # 사용자가 특정 장소 간의 이동 방법을 물어봤는지 파악
+    param_prompt = """
+    사용자의 요청이 'A에서 B로 가는 방법'처럼 특정 경로의 교통편을 묻는 것이라면 출발지와 도착지를 추출하세요.
+    경로 질문이 아니면 빈 문자열을 반환하세요.
+    JSON: {"origin": "신주쿠역", "destination": "시부야 스카이"}
+    """
+    params = extract_params_with_openai(param_prompt, user_message, context)
+    origin = params.get("origin")
+    dest = params.get("destination")
+    
+    transit_data = ""
+    # 출발지/도착지가 모두 있으면 실시간 구글 맵스 API 호출 (대중교통 & 자동차 둘 다)
+    if origin and dest:
+        print(f"🚌/🚗 대중교통/자동차 실시간 경로 검색: {origin} -> {dest}")
+        transit_result = get_directions_info(origin, dest, mode="transit")
+        driving_result = get_directions_info(origin, dest, mode="driving")
+        transit_data = f"\\n[실시간 대중교통 데이터: {origin} -> {dest}]\\n{transit_result}\\n\\n[실시간 자동차(택시/렌트카) 데이터: {origin} -> {dest}]\\n{driving_result}\\n"
+
+    system_prompt = "당신은 빠삭한 현지 지식을 갖춘 교통/로컬 가이드입니다."
+    user_prompt = f"""
+    [대화 맥락] {context}
+    [사용자 질문] {user_message}
+    {transit_data}
+    
+    위 데이터를 바탕으로 이동 방법(대중교통, 자동차 등)이나 현지 꿀팁(패스권 추천, 도로 상황, 대중교통 주의사항 등)을 상세하고 친절하게 안내해 주세요. 제공된 대중교통 시간과 자동차 시간이 둘다 있다면 비교해서 가장 좋은 방법을 추천해 주세요.
+    """
+    return call_gemini(system_prompt, user_prompt, temperature=0.3)
+
+# -------------------------------------------------------------------
+# 8. 교통 수단 검색
+# -------------------------------------------------------------------
+def transportation_search(args: dict, context: str = "") -> str:
+    """
+    A -> B 단일 구간 이동 옵션 검색
+    args:
+      - origin (str)
+      - destination (str)
+      - mode (str, optional): TRANSIT/WALK/DRIVE/BICYCLE/ALL or 한국어 별칭(도보/대중교통/자동차/전체)
+      - modes (list[str], optional): ["TRANSIT","WALK","DRIVE"] 처럼 명시 (mode보다 우선순위 낮게)
+      - departure_time_iso (str, optional)
+    """
+    args = args or {}
+    origin = (args.get("origin") or "").strip()
+    destination = (args.get("destination") or "").strip()
+
+    if not origin or not destination:
+        return (
+            "이동 경로를 찾기 위해 출발지(origin)와 도착지(destination)가 필요해요.\n"
+            "예) '도쿄역에서 시부야 스크램블까지 대중교통으로 얼마나 걸려?'"
+        )
+
+    mode = args.get("mode")
+    modes = args.get("modes")
+    departure_time_iso = args.get("departure_time_iso")
+
+    return render_transport_options(
+        origin=origin,
+        destination=destination,
+        mode=mode,
+        modes=modes,
+        departure_time_iso=departure_time_iso,
+    )
+
+
+def transportation_batch(args: dict, context: str = "") -> str:
+    """
+    일정(장소 리스트)의 인접 구간 이동시간을 한 번에 계산
+    args:
+      - stops (list[str])  # ["도쿄역","센소지","시부야"] ...
+      - mode (str, optional): TRANSIT/WALK/DRIVE/BICYCLE (ALL은 TRANSIT으로 처리됨)
+      - departure_time_iso (str, optional)
+    """
+    args = args or {}
+    stops = args.get("stops") or []
+    if isinstance(stops, str):
+        # 혹시 문자열로 오면 쉼표로 분해
+        stops = [s.strip() for s in stops.split(",") if s.strip()]
+
+    if not isinstance(stops, list) or len(stops) < 2:
+        return (
+            "구간별 이동시간을 계산하려면 stops에 최소 2개 이상의 장소가 필요해요.\n"
+            "예) stops=['도쿄역','센소지','아키하바라','시부야']"
+        )
+
+    mode = args.get("mode") or "TRANSIT"
+    departure_time_iso = args.get("departure_time_iso")
+
+    return render_transport_batch(
+        stops=stops,
+        mode=mode,
+        departure_time_iso=departure_time_iso,
+    )
 # -------------------------------------------------------------------
 # 메인 라우터
 # -------------------------------------------------------------------
 def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
+    plan = plan or {}
     tool = plan.get("tools", ["general_chat"])[0]
     user_message = plan.get("original_user_message", "")
+
+    args = plan.get("args") or {}
 
     print(f"🚀 [Tool Execution] Tool: {tool}")
 
@@ -253,8 +390,19 @@ def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
         return run_stay_search_tool(user_message, context)
     elif tool == "food_spot_search":
         return run_food_spot_search_tool(user_message, context)
+    elif tool == "event_search":
+        return run_event_search_tool(user_message, context)
+    
+    elif tool == "transportation_search":
+        args = plan.get("args", {}) or {}
+        return transportation_search(args, context)
+    
+    elif tool == "transportation_batch":
+        args = plan.get("args", {}) or {}
+        return transportation_batch(args, context)
+    
     elif tool == "local_guide":
-        return call_gemini("현지 가이드입니다.", f"컨텍스트: {context}\n질문: {user_message}")
+        return run_local_guide_tool(user_message, context)
     elif tool == "budget_planner":
         return call_gemini("예산 전문가입니다.", f"컨텍스트: {context}\n질문: {user_message}")
     elif tool == "out_of_scope":
