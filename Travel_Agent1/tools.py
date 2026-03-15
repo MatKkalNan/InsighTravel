@@ -18,6 +18,7 @@ from crawl_accommodation_amadeus import search_hotels_api as search_amadeus
 from flight_service import search_flight_offers
 from transportation_service import render_transport_options, render_transport_batch
 from event_service import search_events_serpapi
+from travel_warning_service import render_travel_warning
 
 # [Gemini 서비스 임포트]
 from gemini_service import call_gemini, summarize_flight_data
@@ -368,6 +369,15 @@ def transportation_batch(args: dict, context: str = "") -> str:
         mode=mode,
         departure_time_iso=departure_time_iso,
     )
+
+# -------------------------------------------------------------------
+# 9. 여행 주의 경보
+# -------------------------------------------------------------------
+
+def run_travel_warning_tool(user_message: str, context: str) -> str:
+    country = user_message.strip()
+    return render_travel_warning(country)
+
 # -------------------------------------------------------------------
 # 메인 라우터
 # -------------------------------------------------------------------
@@ -401,6 +411,12 @@ def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
         args = plan.get("args", {}) or {}
         return transportation_batch(args, context)
     
+    elif tool == "travel_warning_search":
+        args = plan.get("args", {}) or {}
+        country = (args.get("country") or "").strip()
+        if country:
+            return render_travel_warning(country)
+        return run_travel_warning_tool(user_message, context)
     elif tool == "local_guide":
         return run_local_guide_tool(user_message, context)
     elif tool == "budget_planner":

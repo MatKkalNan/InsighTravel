@@ -92,6 +92,9 @@ PLANNER_SYSTEM_PROMPT = """
 
   stops 배열은 반드시 **사용자가 말한 순서를 유지해야 합니다.**
 
+  - "travel_warning_search"
+  특정 국가/지역의 여행경보, 출국권고, 여행금지, 특별여행주의보 여부와 최근 조정 정보를 안내하는 도구
+
 - "event_search"
   특정 지역의 축제, 이벤트, 페스티벌, 가볼만한 행사 등을 검색하는 도구
 
@@ -188,6 +191,9 @@ PLANNER_SYSTEM_PROMPT = """
 
 → intent = "event_search"
 
+12) 사용자가 "이 나라 안전해?", "여행경보", "출국권고", "여행금지", "특별여행주의보", "위험한 지역" 등을 물어보면
+→ intent = "travel_warning_search"
+
 추가 규칙:
   - 사용자가 "평점 높은 곳", "리뷰 좋은 곳", "별점 4점 이상"처럼 품질 기준을 강조하면
     기본적으로 "itinerary_planner" 또는 "food_spot_search"를 선택하세요.
@@ -264,6 +270,20 @@ args 예
 - 찍고
 - → (화살표)
 
+--------------------------------------------------
+
+[여행경보 관련 규칙]
+
+- 사용자가 특정 국가/지역의 여행경보를 물어보면 travel_warning_search를 선택하세요.
+- 국가명/지역명이 명확하면 args에 넣으세요.
+
+travel_warning_search args 예:
+{
+  "country": "일본"
+}
+
+- 사용자가 "이 나라 안전해?", "위험한 지역 있어?", "출국권고 지역 있어?"처럼 물으면
+  최신 여행경보 정보를 조회하는 도구로 판단하세요.
 
 
 --------------------------------------------------
@@ -296,7 +316,9 @@ args 예
 - 여행과 거의 무관하면 intent = "out_of_scope", tools = ["out_of_scope"], trip_stage = "ideation"으로 둡니다.
 - args는 필요한 경우에만 채웁니다.
 - transportation_search / transportation_batch는 반드시 args를 채워야 합니다.
+- travel_warning_search는 가능하면 args.country를 채우세요.
 - JSON 이외의 텍스트는 출력하지 마세요.
+- 코드블록 마크다운(```)도 출력하지 마세요.
 """
 
 
@@ -343,6 +365,7 @@ def plan_tasks(planner_context: str, user_message: str) -> Dict[str, Any]:
             "tools": ["out_of_scope"],
             "subtasks": ["여행 범위를 벗어난 질문임을 알리고, 여행 주제로 다시 유도한다."],
             "trip_stage": "ideation",
+            "args": {},
         }
 
     # 2) LLM에게 맡겨서 plan JSON 생성
@@ -364,6 +387,7 @@ def plan_tasks(planner_context: str, user_message: str) -> Dict[str, Any]:
                 "tools": ["general_chat"],
                 "subtasks": ["사용자의 여행 고민을 듣고 다음에 무엇을 정하면 좋을지 도와준다."],
                 "trip_stage": "ideation",
+                "args": {},
             }
 
     # 4) 보정: 필드 누락/형식 이상 시 기본값 채우기
