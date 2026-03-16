@@ -17,7 +17,7 @@ from crawl_accommodation_booking_com import search_hotels_api as search_booking
 from crawl_accommodation_amadeus import search_hotels_api as search_amadeus
 from flight_service import search_flight_offers
 from transportation_service import render_transport_options, render_transport_batch
-from event_service import search_events_serpapi
+from event_service import search_events_serpapi, search_korea_festivals_tourapi
 
 # [Gemini 서비스 임포트]
 from gemini_service import call_gemini, summarize_flight_data
@@ -243,34 +243,76 @@ def run_food_spot_search_tool(user_message: str, context: str) -> str:
 # -------------------------------------------------------------------
 # [NEW] 6. 축제/이벤트 검색
 # -------------------------------------------------------------------
+
+# tools.py 내 run_event_search_tool 함수 부분
+
 def run_event_search_tool(user_message: str, context: str) -> str:
-    print("RUNNING: Event/Festival Search")
+    print("RUNNING: Unified Event/Festival/Culture Search (Domestic & International)")
     
-    param_prompt = """
-    사용자의 요청에서 검색할 'query'(이벤트/축제 검색어, 주로 지역명 포함)를 추출하세요.
-    예: "파리 축제 찾아줘" -> {"query": "파리 축제"}
-    JSON 형식으로만 출력: {"query": "검색어"}
+    current_year = datetime.now().year
+    
+    # 1. OpenAI를 통해 검색에 필요한 파라미터(국가, 지역, 검색어, 날짜) 추출
+    param_prompt = f"""
+    사용자의 요청에서 축제, 행사, 전시회 검색을 위한 파라미터를 추출하세요. 현재 연도는 {current_year}년입니다.
+    - country: "한국" 또는 "해외" (질문 맥락에 따라 판단)
+    - region: 도시나 지역명 (예: 서울, 부산, 파리, 삿포로)
+    - query: 검색어 (구글 검색용 풀 텍스트, 예: "부산 벚꽃 축제", "Paris fashion week")
+    - start_date: 행사 시작 기준일 (YYYY-MM-DD 형식, 모르면 빈 문자열 "")
+    
+    JSON 형식으로만 출력: {{"country": "한국", "region": "서울", "query": "서울 전시회", "start_date": ""}}
     """
     params = extract_params_with_openai(param_prompt, user_message, context)
+    
+    country = params.get("country", "한국")
+    region = params.get("region", "")
     query = params.get("query", "축제")
+    start_date = params.get("start_date", "")
     
-    events = search_events_serpapi(query)
-    
-    if events:
-        data_text = "[SerpAPI Event Data]\n"
-        for idx, ev in enumerate(events[:5], 1):
-            data_text += f"{idx}. {ev['title']} (날짜: {ev['date']}, 위치: {ev['address']})\n"
-            if ev['link']:
-                data_text += f"   - 링크: {ev['link']}\n"
-    else:
-        data_text = "현재 검색된 이벤트/축제 정보가 없습니다."
+    events = []
+    source_name = ""
 
-    system_prompt = "당신은 현지 축제와 이벤트를 꿰뚫고 있는 여행 가이드입니다."
-    user_prompt = f"사용자 요청: {user_message}\n\n[이벤트 검색 데이터]\n{data_text}\n\n위 데이터를 바탕으로 사용자에게 흥미로운 축제나 이벤트를 추천해 주세요."
+    # 2. 국가 판별에 따른 API 분기 실행
+    if country == "한국":
+        # event_service.py에서 정의한 통합 함수 호출 (축제 + 문화시설)
+        events = search_korea_festivals_tourapi(region=region, start_date=start_date)
+        source_name = "한국관광공사(TourAPI)"
+    else:
+        # 해외인 경우 기존 SerpAPI 호출
+        events = search_events_serpapi(query)
+        source_name = "구글 이벤트(SerpAPI)"
+    
+    # 3. 데이터 텍스트화 (두 API의 응답 형식을 고려하여 통합 포맷팅)
+    if events:
+        data_text = f"🔎 [{source_name} 검색 결과]\n"
+        for idx, ev in enumerate(events[:10], 1): # 최대 10개 표시
+            # 각 API마다 key 값이 조금씩 다를 수 있으므로 안전하게 get 사용
+            title = ev.get('title', '제목 없음')
+            date = ev.get('date', '날짜 정보 없음')
+            address = ev.get('address', '위치 정보 없음')
+            description = ev.get('description', '')
+            link = ev.get('link', '')
+            etype = ev.get('type', '이벤트') # TourAPI에는 type 정보가 있음
+
+            data_text += f"{idx}. [{etype}] {title}\n"
+            data_text += f"   📅 일정: {date}\n"
+            data_text += f"   📍 위치: {address}\n"
+            
+            if description and description != "설명 없음":
+                data_text += f"   💬 {description}\n"
+            
+            if link: # SerpAPI 등 링크가 있는 경우 표시
+                data_text += f"   🔗 링크: {link}\n"
+                
+            data_text += "-" * 30 + "\n"
+    else:
+        data_text = f"현재 {region if region else country} 지역의 검색된 정보가 없습니다."
+
+    # 4. Gemini에게 데이터를 전달하여 최종 답변 생성
+    system_prompt = "당신은 국내외 축제, 전시, 문화 행사를 꿰뚫고 있는 전문 여행 가이드입니다. 제공된 데이터를 바탕으로 사용자에게 친절하고 상세하게 추천해 주세요."
+    user_prompt = f"사용자 요청: {user_message}\n\n[검색된 실시간 데이터 리스트]\n{data_text}\n\n위 데이터를 분석하여 사용자의 요청에 딱 맞는 추천 답변을 작성해 주세요."
     
     return call_gemini(system_prompt, user_prompt, temperature=0.5)
-
-# -------------------------------------------------------------------
+#-----------------------------------------------------------------
 # 7. [NEW] 현지 가이드 (실시간 교통 길찾기 연동 - 대중교통 & 자동차)
 # -------------------------------------------------------------------
 def run_local_guide_tool(user_message: str, context: str) -> str:
@@ -392,15 +434,12 @@ def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
         return run_food_spot_search_tool(user_message, context)
     elif tool == "event_search":
         return run_event_search_tool(user_message, context)
-    
     elif tool == "transportation_search":
         args = plan.get("args", {}) or {}
         return transportation_search(args, context)
-    
     elif tool == "transportation_batch":
         args = plan.get("args", {}) or {}
         return transportation_batch(args, context)
-    
     elif tool == "local_guide":
         return run_local_guide_tool(user_message, context)
     elif tool == "budget_planner":
