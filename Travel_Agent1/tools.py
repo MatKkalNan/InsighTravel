@@ -70,6 +70,7 @@ def run_trip_ideation_tool(user_message: str, context: str) -> str:
 def run_itinerary_planner_tool(user_message: str, context: str) -> str:
     print("RUNNING: Itinerary Planner")
     
+    # 1. 파라미터 추출 (목적지, 한국 여부)
     param_prompt = """
     사용자의 요청에서 'destination'과 'is_korea'(한국 여부, boolean)를 추출하세요.
     JSON 형식으로만 출력: {"destination": "Jeju", "is_korea": true}
@@ -78,6 +79,7 @@ def run_itinerary_planner_tool(user_message: str, context: str) -> str:
     destination = params.get("destination", "여행지")
     is_korea = params.get("is_korea", False)
 
+    # 2. 장소 검색 (Google/Naver)
     places_info = ""
     print(f"🔎 '{destination}' 장소 검색 중... (한국여부: {is_korea})")
     
@@ -96,14 +98,27 @@ def run_itinerary_planner_tool(user_message: str, context: str) -> str:
             places_info += f"\n[Naver Maps Data (Backup)]\n"
             for p in n_spots[:5]: places_info += f"- (명소) {p['title']}\n"
             for p in n_food[:5]: places_info += f"- (맛집) {p['title']}\n"
+            
+     # 3. [날씨 데이터 처리] 
+    weather_info_text = ""
+    if weather_data:
+        # JSON 데이터를 텍스트로 변환하여 Gemini가 읽기 좋게 만듦
+        weather_info_text = f"\n[실시간 날씨 데이터]\n{json.dumps(weather_data, ensure_ascii=False, indent=2)}"
 
-    system_prompt = "당신은 전문 여행 플래너입니다. 동선과 장소의 매력을 고려하여 완벽한 일정을 계획합니다."
+    # 4. 최종 프롬프트 구성 및 Gemini 호출
+    system_prompt = "당신은 전문 여행 플래너입니다. 기상 상황과 동선의 효율성, 장소의 매력을 고려하여 완벽한 일정을 계획합니다."
     user_prompt = f"""
     [사용자 요청] {user_message}
     [검색된 장소 데이터] {places_info}
+    {weather_info_text}
     
-    위 데이터를 활용하여 실현 가능한 일정을 짜주세요. 데이터에 있는 장소 이름을 우선적으로 사용하세요.
-    """
+    [지침]
+    1. 검색된 장소 데이터를 우선적으로 사용하여 일정을 구성하세요.
+    2. [실시간 날씨 데이터]가 있다면 반드시 확인하세요. 
+       - 비 예보가 있다면 박물관, 미술관 등 실내 코스를 추천하세요.
+       - 맑은 날씨라면 공원, 바다 등 야외 활동을 우선 배치하세요.
+       - 기온에 맞는 옷차림 정보나 우산 지참 여부도 짧게 언급해 주세요.
+       """
     return call_gemini(system_prompt, user_prompt, temperature=0.4)
 
 
@@ -253,6 +268,8 @@ def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
         return run_stay_search_tool(user_message, context)
     elif tool == "food_spot_search":
         return run_food_spot_search_tool(user_message, context)
+    elif tool == "itinerary_planner":
+        return run_itinerary_planner_tool(user_message, context, weather_data)
     elif tool == "local_guide":
         return call_gemini("현지 가이드입니다.", f"컨텍스트: {context}\n질문: {user_message}")
     elif tool == "budget_planner":
