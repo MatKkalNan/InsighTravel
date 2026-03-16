@@ -11,11 +11,14 @@ from openai import OpenAI
 
 # [서비스 모듈 임포트]
 from naver_service import search_places_naver
-from google_maps_service import search_places_google
+from google_maps_service import search_places_google, get_directions_info
 from crawl_accommodation_tripadvisor import search_hotels_with_retry as search_tripadvisor
 from crawl_accommodation_booking_com import search_hotels_api as search_booking
 from crawl_accommodation_amadeus import search_hotels_api as search_amadeus
-from flight_service import search_flight_offers  
+from flight_service import search_flight_offers
+from transportation_service import render_transport_options, render_transport_batch
+from event_service import search_events_serpapi, search_korea_festivals_tourapi
+from travel_warning_service import render_travel_warning
 
 # [Gemini 서비스 임포트]
 from gemini_service import call_gemini, summarize_flight_data
@@ -180,10 +183,10 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     
     if not destination:
         return "어느 지역의 숙소를 찾아드릴까요? 도시 이름을 말씀해 주세요."
-    
+
     ## 다중 API 호출 및 데이터 통합
     all_accommodations = []
-    
+
     # (A) TripAdvisor
     try:
         ta_results = search_tripadvisor(destination, check_in, check_out)
@@ -248,13 +251,194 @@ def run_food_spot_search_tool(user_message: str, context: str) -> str:
 
     return call_gemini("당신은 미식 가이드입니다.", f"요청: {user_message}\n데이터:\n{data_text}")
 
+# -------------------------------------------------------------------
+# [NEW] 6. 축제/이벤트 검색
+# -------------------------------------------------------------------
+
+# tools.py 내 run_event_search_tool 함수 부분
+
+def run_event_search_tool(user_message: str, context: str) -> str:
+    print("RUNNING: Unified Event/Festival/Culture Search (Domestic & International)")
+    
+    current_year = datetime.now().year
+    
+    # 1. OpenAI를 통해 검색에 필요한 파라미터(국가, 지역, 검색어, 날짜) 추출
+    param_prompt = f"""
+    사용자의 요청에서 축제, 행사, 전시회 검색을 위한 파라미터를 추출하세요. 현재 연도는 {current_year}년입니다.
+    - country: "한국" 또는 "해외" (질문 맥락에 따라 판단)
+    - region: 도시나 지역명 (예: 서울, 부산, 파리, 삿포로)
+    - query: 검색어 (구글 검색용 풀 텍스트, 예: "부산 벚꽃 축제", "Paris fashion week")
+    - start_date: 행사 시작 기준일 (YYYY-MM-DD 형식, 모르면 빈 문자열 "")
+    
+    JSON 형식으로만 출력: {{"country": "한국", "region": "서울", "query": "서울 전시회", "start_date": ""}}
+    """
+    params = extract_params_with_openai(param_prompt, user_message, context)
+    
+    country = params.get("country", "한국")
+    region = params.get("region", "")
+    query = params.get("query", "축제")
+    start_date = params.get("start_date", "")
+    
+    events = []
+    source_name = ""
+
+    # 2. 국가 판별에 따른 API 분기 실행
+    if country == "한국":
+        # event_service.py에서 정의한 통합 함수 호출 (축제 + 문화시설)
+        events = search_korea_festivals_tourapi(region=region, start_date=start_date)
+        source_name = "한국관광공사(TourAPI)"
+    else:
+        # 해외인 경우 기존 SerpAPI 호출
+        events = search_events_serpapi(query)
+        source_name = "구글 이벤트(SerpAPI)"
+    
+    # 3. 데이터 텍스트화 (두 API의 응답 형식을 고려하여 통합 포맷팅)
+    if events:
+        data_text = f"🔎 [{source_name} 검색 결과]\n"
+        for idx, ev in enumerate(events[:10], 1): # 최대 10개 표시
+            # 각 API마다 key 값이 조금씩 다를 수 있으므로 안전하게 get 사용
+            title = ev.get('title', '제목 없음')
+            date = ev.get('date', '날짜 정보 없음')
+            address = ev.get('address', '위치 정보 없음')
+            description = ev.get('description', '')
+            link = ev.get('link', '')
+            etype = ev.get('type', '이벤트') # TourAPI에는 type 정보가 있음
+
+            data_text += f"{idx}. [{etype}] {title}\n"
+            data_text += f"   📅 일정: {date}\n"
+            data_text += f"   📍 위치: {address}\n"
+            
+            if description and description != "설명 없음":
+                data_text += f"   💬 {description}\n"
+            
+            if link: # SerpAPI 등 링크가 있는 경우 표시
+                data_text += f"   🔗 링크: {link}\n"
+                
+            data_text += "-" * 30 + "\n"
+    else:
+        data_text = f"현재 {region if region else country} 지역의 검색된 정보가 없습니다."
+
+    # 4. Gemini에게 데이터를 전달하여 최종 답변 생성
+    system_prompt = "당신은 국내외 축제, 전시, 문화 행사를 꿰뚫고 있는 전문 여행 가이드입니다. 제공된 데이터를 바탕으로 사용자에게 친절하고 상세하게 추천해 주세요."
+    user_prompt = f"사용자 요청: {user_message}\n\n[검색된 실시간 데이터 리스트]\n{data_text}\n\n위 데이터를 분석하여 사용자의 요청에 딱 맞는 추천 답변을 작성해 주세요."
+    
+    return call_gemini(system_prompt, user_prompt, temperature=0.5)
+#-----------------------------------------------------------------
+# 7. [NEW] 현지 가이드 (실시간 교통 길찾기 연동 - 대중교통 & 자동차)
+# -------------------------------------------------------------------
+def run_local_guide_tool(user_message: str, context: str) -> str:
+    print("RUNNING: Local Guide (With Live Transit & Driving)")
+    
+    # 사용자가 특정 장소 간의 이동 방법을 물어봤는지 파악
+    param_prompt = """
+    사용자의 요청이 'A에서 B로 가는 방법'처럼 특정 경로의 교통편을 묻는 것이라면 출발지와 도착지를 추출하세요.
+    경로 질문이 아니면 빈 문자열을 반환하세요.
+    JSON: {"origin": "신주쿠역", "destination": "시부야 스카이"}
+    """
+    params = extract_params_with_openai(param_prompt, user_message, context)
+    origin = params.get("origin")
+    dest = params.get("destination")
+    
+    transit_data = ""
+    # 출발지/도착지가 모두 있으면 실시간 구글 맵스 API 호출 (대중교통 & 자동차 둘 다)
+    if origin and dest:
+        print(f"🚌/🚗 대중교통/자동차 실시간 경로 검색: {origin} -> {dest}")
+        transit_result = get_directions_info(origin, dest, mode="transit")
+        driving_result = get_directions_info(origin, dest, mode="driving")
+        transit_data = f"\\n[실시간 대중교통 데이터: {origin} -> {dest}]\\n{transit_result}\\n\\n[실시간 자동차(택시/렌트카) 데이터: {origin} -> {dest}]\\n{driving_result}\\n"
+
+    system_prompt = "당신은 빠삭한 현지 지식을 갖춘 교통/로컬 가이드입니다."
+    user_prompt = f"""
+    [대화 맥락] {context}
+    [사용자 질문] {user_message}
+    {transit_data}
+    
+    위 데이터를 바탕으로 이동 방법(대중교통, 자동차 등)이나 현지 꿀팁(패스권 추천, 도로 상황, 대중교통 주의사항 등)을 상세하고 친절하게 안내해 주세요. 제공된 대중교통 시간과 자동차 시간이 둘다 있다면 비교해서 가장 좋은 방법을 추천해 주세요.
+    """
+    return call_gemini(system_prompt, user_prompt, temperature=0.3)
+
+# -------------------------------------------------------------------
+# 8. 교통 수단 검색
+# -------------------------------------------------------------------
+def transportation_search(args: dict, context: str = "") -> str:
+    """
+    A -> B 단일 구간 이동 옵션 검색
+    args:
+      - origin (str)
+      - destination (str)
+      - mode (str, optional): TRANSIT/WALK/DRIVE/BICYCLE/ALL or 한국어 별칭(도보/대중교통/자동차/전체)
+      - modes (list[str], optional): ["TRANSIT","WALK","DRIVE"] 처럼 명시 (mode보다 우선순위 낮게)
+      - departure_time_iso (str, optional)
+    """
+    args = args or {}
+    origin = (args.get("origin") or "").strip()
+    destination = (args.get("destination") or "").strip()
+
+    if not origin or not destination:
+        return (
+            "이동 경로를 찾기 위해 출발지(origin)와 도착지(destination)가 필요해요.\n"
+            "예) '도쿄역에서 시부야 스크램블까지 대중교통으로 얼마나 걸려?'"
+        )
+
+    mode = args.get("mode")
+    modes = args.get("modes")
+    departure_time_iso = args.get("departure_time_iso")
+
+    return render_transport_options(
+        origin=origin,
+        destination=destination,
+        mode=mode,
+        modes=modes,
+        departure_time_iso=departure_time_iso,
+    )
+
+
+def transportation_batch(args: dict, context: str = "") -> str:
+    """
+    일정(장소 리스트)의 인접 구간 이동시간을 한 번에 계산
+    args:
+      - stops (list[str])  # ["도쿄역","센소지","시부야"] ...
+      - mode (str, optional): TRANSIT/WALK/DRIVE/BICYCLE (ALL은 TRANSIT으로 처리됨)
+      - departure_time_iso (str, optional)
+    """
+    args = args or {}
+    stops = args.get("stops") or []
+    if isinstance(stops, str):
+        # 혹시 문자열로 오면 쉼표로 분해
+        stops = [s.strip() for s in stops.split(",") if s.strip()]
+
+    if not isinstance(stops, list) or len(stops) < 2:
+        return (
+            "구간별 이동시간을 계산하려면 stops에 최소 2개 이상의 장소가 필요해요.\n"
+            "예) stops=['도쿄역','센소지','아키하바라','시부야']"
+        )
+
+    mode = args.get("mode") or "TRANSIT"
+    departure_time_iso = args.get("departure_time_iso")
+
+    return render_transport_batch(
+        stops=stops,
+        mode=mode,
+        departure_time_iso=departure_time_iso,
+    )
+
+# -------------------------------------------------------------------
+# 9. 여행 주의 경보
+# -------------------------------------------------------------------
+
+def run_travel_warning_tool(user_message: str, context: str) -> str:
+    country = user_message.strip()
+    return render_travel_warning(country)
 
 # -------------------------------------------------------------------
 # 메인 라우터
 # -------------------------------------------------------------------
 def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
+    plan = plan or {}
     tool = plan.get("tools", ["general_chat"])[0]
     user_message = plan.get("original_user_message", "")
+
+    args = plan.get("args") or {}
 
     print(f"🚀 [Tool Execution] Tool: {tool}")
 
@@ -270,8 +454,25 @@ def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
         return run_food_spot_search_tool(user_message, context)
     elif tool == "itinerary_planner":
         return run_itinerary_planner_tool(user_message, context, weather_data)
+    elif tool == "event_search":
+        return run_event_search_tool(user_message, context)
+    
+    elif tool == "transportation_search":
+        args = plan.get("args", {}) or {}
+        return transportation_search(args, context)
+    
+    elif tool == "transportation_batch":
+        args = plan.get("args", {}) or {}
+        return transportation_batch(args, context)
+    
+    elif tool == "travel_warning_search":
+        args = plan.get("args", {}) or {}
+        country = (args.get("country") or "").strip()
+        if country:
+            return render_travel_warning(country)
+        return run_travel_warning_tool(user_message, context)
     elif tool == "local_guide":
-        return call_gemini("현지 가이드입니다.", f"컨텍스트: {context}\n질문: {user_message}")
+        return run_local_guide_tool(user_message, context)
     elif tool == "budget_planner":
         return call_gemini("예산 전문가입니다.", f"컨텍스트: {context}\n질문: {user_message}")
     elif tool == "out_of_scope":
