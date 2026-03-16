@@ -49,6 +49,9 @@ from models import Base
 from graph_app import chat_graph_app
 from graph_state import ChatState
 
+# [날씨 모듈 통합]
+from weather_info import get_insight_weather_data
+
 load_dotenv()
 
 # (선택) DB 초기화 on/off 토글: 문제가 생기면 환경변수로 끌 수 있음
@@ -109,9 +112,24 @@ async def index():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+    # 1. 메세지 히스토리 정리
     # history 원본을 직접 수정하지 않도록 복사해서 사용 (중복/오염 방지)
     messages = list(request.history) if request.history else []
     messages.append({"role": "user", "content": request.message})
+    
+    # 2. 날씨 모듈 통합 (날씨 데이터를 가져와 변수에 저장) 
+    from datetime import datetime
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    
+    current_weather = get_insight_weather_data(37.5665, 126.9780, today_str)
+    # 현재는 서울(37.5665, 126.9780) 기준으로 호출
+    # 추후 사용자의 목적지가 확정되면 해당 좌표를 동적으로 넣도록 개선필요
+    
+    print(f"--- [DEBUG 1] API 호출 결과: {current_weather is not None} ---")
+    if current_weather:
+        print(f"--- [DEBUG 2] 데이터 샘플: {str(current_weather)[:100]}... ---")
+    
+    # 3. LangGraph 초기 상태 설정
 
     initial_state: ChatState = {
         "messages": messages,
@@ -119,10 +137,15 @@ async def chat(request: ChatRequest):
         "trip_goal": None,
         "plan": None,
         "tool_output": None,
+        "weather_data": current_weather, 
     }
 
     # 그래프 실행 (Start -> Context -> Goal -> Planner -> Tool -> End)
     result = chat_graph_app.invoke(initial_state)
+    
+    # [디버깅 추가] 에이전트에게 전달된 날씨 데이터가 실제로 있는지 확인
+    print(f"DEBUG: 에이전트에게 전달된 날씨 데이터 -> {result.get('weather_data') is not None}")
+
 
     return ChatResponse(
         reply=result.get("tool_output", "처리 중 오류가 발생했습니다."),

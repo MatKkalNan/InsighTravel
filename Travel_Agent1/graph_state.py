@@ -54,16 +54,15 @@ class ChatState(TypedDict):
     아직은 chat_state만 수정, 후에 다른 코드 수정을 통해 발전 가능
     (2026/03/02 수정 후 테스트 완료 : 오류 x)
     """
-    # 기존
+    
     messages: List[ChatMessage]
     context: str
     trip_goal: Optional[str] # trip_goal: Optional[Dict[str, Any]]
     plan: Optional[Dict[str, Any]]
     tool_output: Optional[str]
-
-    # 추가
     trip_profile: Optional[TripProfile]
     constraints: Optional[Constraints]
     tool_results: Optional[Dict[str, ToolResult]]
     replan: Optional[ReplanState]
+    weather_data: Optional[Dict[str, Any]] 
 
