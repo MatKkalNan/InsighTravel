@@ -37,7 +37,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -51,6 +51,9 @@ from graph_state import ChatState
 
 # [날씨 모듈 통합]
 from weather_info import get_insight_weather_data
+
+# [예약 기능]
+from booking_page_service import booking_store
 
 load_dotenv()
 
@@ -154,8 +157,51 @@ async def chat(request: ChatRequest):
     )
 
 
+# -------------------------------------------------------------------
+# [예약 기능] 가짜 예약 웹사이트 엔드포인트
+# -------------------------------------------------------------------
+
+class BookingConfirmRequest(BaseModel):
+    session_id: str
+    booking_type: str       # "hotel" or "flight"
+    item_index: int
+    passenger_info: Dict[str, Any]
+
+
+@app.get("/booking/hotel", response_class=HTMLResponse)
+async def booking_hotel_page(session_id: str = ""):
+    """호텔 예약 페이지 (iframe으로 로드됨)"""
+    html_path = os.path.join(os.path.dirname(__file__), "booking_hotel.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
+@app.get("/booking/flight", response_class=HTMLResponse)
+async def booking_flight_page(session_id: str = ""):
+    """항공권 예약 페이지 (iframe으로 로드됨)"""
+    html_path = os.path.join(os.path.dirname(__file__), "booking_flight.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
+@app.get("/api/booking/data")
+async def get_booking_data(session_id: str, type: str = "hotel"):
+    """예약 페이지에서 호텔/항공편 데이터를 가져가는 API"""
+    data = booking_store.get_temp_data(session_id, type)
+    return JSONResponse({"items": data, "session_id": session_id})
+
+
+@app.post("/booking/confirm")
+async def confirm_booking(req: BookingConfirmRequest):
+    """가짜 예약 확인 처리"""
+    booking = booking_store.confirm_booking(
+        req.session_id, req.booking_type,
+        req.item_index, req.passenger_info
+    )
+    return JSONResponse(booking)
+
+
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
