@@ -145,13 +145,16 @@ def _amadeus_flight_info(itinerary: Dict[str, Any]) -> str:
     
     cc = first.get("carrierCode", "")
     cname = AIRLINE_MAP.get(cc, cc)
+    fn = first.get("number", "")
+    flight_no = f"{cc}{fn}" if fn else ""  # 예: KE701
     
     dep = (first.get("departure") or {}).get("at", "")[5:16].replace("T", " ")
     arr = (last.get("arrival") or {}).get("at", "")[5:16].replace("T", " ")
     
     stops = len(segs) - 1
     rtype = "직항" if stops == 0 else f"{stops}회 경유"
-    return f"[{cname}] {dep}~{arr} ({dur}, {rtype})"
+    flight_no_str = f" ({flight_no})" if flight_no else ""
+    return f"[{cname}{flight_no_str}] {dep}~{arr} ({dur}, {rtype})"
 
 def _amadeus_details(offer: Dict[str, Any]) -> Tuple[str, str]:
     try:

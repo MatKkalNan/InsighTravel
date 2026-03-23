@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InsighTravel - 항공권 예약</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #f7f8fa;
+      color: #1a1a2e;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    .booking-container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 28px 20px 56px;
+    }
+
+    /* 헤더 */
+    .page-header {
+      text-align: center;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 2px solid #e8eaf0;
+    }
+
+    .logo {
+      font-size: 21px;
+      font-weight: 800;
+      color: #1a73e8;
+      letter-spacing: -.5px;
+    }
+
+    .logo span {
+      color: #f59e0b;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    #booking-status {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 10px;
+      background: #e8f0fe;
+      color: #1a73e8;
+      transition: all .3s;
+    }
+
+    .progress-bar-wrap {
+      background: #e8f0fe;
+      border-radius: 999px;
+      height: 4px;
+      margin: 8px 0 0;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: #1a73e8;
+      border-radius: 999px;
+      width: 0%;
+      transition: width .4s ease;
+    }
+
+    /* 예약 요약 배지 */
+    .booking-summary {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      justify-content: center;
+    }
+
+    .summary-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: #444;
+      font-weight: 500;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .05);
+    }
+
+    /* 섹션 제목 */
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-count {
+      font-size: 12px;
+      font-weight: 500;
+      color: #888;
+      background: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    /* 항공편 카드 */
+    .flight-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .flight-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px 18px;
+      border: 2px solid #e8eaf0;
+      cursor: pointer;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .05);
+      position: relative;
+    }
+
+    .flight-card:hover {
+      border-color: #1a73e8;
+      box-shadow: 0 4px 16px rgba(26, 115, 232, .12);
+      transform: translateY(-1px);
+    }
+
+    .flight-card.selected {
+      border-color: #1a73e8;
+      background: #f0f6ff;
+      box-shadow: 0 4px 18px rgba(26, 115, 232, .18);
+    }
+
+    .flight-card.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      background: #1a73e8;
+      color: #fff;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .flight-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .flight-airline {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .flight-price {
+      font-size: 16px;
+      font-weight: 800;
+      color: #f59e0b;
+    }
+
+    .flight-times {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    .time-block .time-val {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .time-block .time-label {
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    .flight-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .ftag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 500;
+      background: #f5f5f5;
+      color: #555;
+      border: 1px solid #e8eaf0;
+    }
+
+    .ftag.direct {
+      background: #e6f4ea;
+      color: #1e8e3e;
+      border-color: #c8e6c9;
+    }
+
+    .ftag.stopover {
+      background: #fff8e1;
+      color: #c77700;
+      border-color: #ffe082;
+    }
+
+    /* 폼 */
+    .form-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 20px 18px;
+      border: 1px solid #e8eaf0;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .05);
+    }
+
+    .form-card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .form-grid .full {
+      grid-column: 1 / -1;
+    }
+
+    .form-field-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .form-field-label {
+      font-size: 11px;
+      color: #888;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+
+    .form-field {
+      background: #fff;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 9px;
+      padding: 10px 12px;
+      width: 100%;
+      color: #222;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .form-field::placeholder {
+      color: #d0d0d0;
+    }
+
+    .form-field:focus {
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, .1);
+    }
+
+    .auto-typing {
+      border-color: #f59e0b !important;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, .15) !important;
+    }
+
+    .confirm-btn {
+      width: 100%;
+      padding: 14px;
+      background: #1a73e8;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      box-shadow: 0 2px 12px rgba(26, 115, 232, .22);
+      transition: background .2s, transform .15s;
+    }
+
+    .confirm-btn:hover {
+      background: #1557b0;
+    }
+
+    .click-pointer {
+      position: fixed;
+      width: 28px;
+      height: 28px;
+      background: radial-gradient(circle, rgba(26, 115, 232, .8), rgba(26, 115, 232, 0));
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9999;
+      animation: clickPulse .6s ease-out forwards;
+    }
+
+    @keyframes clickPulse {
+      0% {
+        transform: scale(.5);
+        opacity: 1
+      }
+
+      100% {
+        transform: scale(3);
+        opacity: 0
+      }
+    }
+
+    /* 완료 */
+    .confirmation {
+      text-align: center;
+      padding: 44px 20px;
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid #e8eaf0;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+      animation: fadeInUp .5s ease-out;
+    }
+
+    .confirmation .check-icon {
+      font-size: 60px;
+      margin-bottom: 14px;
+      animation: popIn .5s cubic-bezier(.68, -.55, .265, 1.55);
+    }
+
+    .confirmation h2 {
+      font-size: 21px;
+      font-weight: 700;
+      color: #1a73e8;
+      margin-bottom: 6px;
+    }
+
+    .confirmation p {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+
+    .booking-id-wrap {
+      display: inline-block;
+      padding: 10px 24px;
+      border-radius: 10px;
+      background: #e8f0fe;
+      color: #1a73e8;
+      font-size: 19px;
+      font-weight: 700;
+      font-family: monospace;
+      letter-spacing: 2px;
+      text-align: left;
+    }
+
+    .booking-id-item {
+      margin-bottom: 4px;
+    }
+
+    .booking-id-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #555;
+    }
+
+    .confirm-detail {
+      margin-top: 18px;
+      background: #f7f8fa;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #555;
+      text-align: left;
+      line-height: 1.9;
+    }
+
+    /* 완료 화면의 상세 항공 정보 */
+    .flight-detail-block {
+      border-top: 1.5px dashed #e8eaf0;
+      margin: 12px 0;
+      padding-top: 12px;
+    }
+
+    .flight-segment {
+      border-bottom: 1px solid #f0f0f0;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+    }
+
+    .flight-segment:last-child {
+      border-bottom: none;
+    }
+
+    .flight-segment-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .flight-segment-route {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 6px;
+    }
+
+    .flight-times-detail {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .flight-more-info {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+    }
+
+    .flight-more-info-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #fff;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid #e8eaf0;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(18px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    @keyframes popIn {
+      0% {
+        transform: scale(0)
+      }
+
+      100% {
+        transform: scale(1)
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="booking-container">
+    <div class="page-header">
+      <div class="logo">Insigh<span>Travel</span> Airways</div>
+      <p class="subtitle">✈️ Flight Reservation</p>
+      <div id="booking-status">항공편 정보 불러오는 중...</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+    </div>
+
+    <div class="booking-summary" id="booking-summary" style="display:none;">
+      <div class="summary-badge">📍 <span id="summary-route">-</span></div>
+      <div class="summary-badge">📅 <span id="summary-dates">-</span></div>
+      <div class="summary-badge">👥 <span id="summary-guests">-</span></div>
+    </div>
+
+    <div id="flight-list-section">
+      <div class="section-title" id="flight-list-label">검색된 항공편 <span class="section-count" id="flight-count">0개</span>
+      </div>
+      <div class="flight-list" id="flight-list"></div>
+    </div>
+
+    <div id="booking-form-section" style="display:none;">
+      <div class="form-card">
+        <div class="form-card-title">📅 출국일 · 귀국일 · 인원</div>
+        <div class="form-grid">
+          <div class="form-field-wrap">
+            <label class="form-field-label">출국일</label>
+            <input class="form-field" id="dep-date" type="date" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">귀국일 (편도 시 공백)</label>
+            <input class="form-field" id="ret-date" type="date" />
+          </div>
+          <div class="form-field-wrap full">
+            <label class="form-field-label">인원 수</label>
+            <input class="form-field" id="pax-count" type="number" min="1" max="10" value="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">🛂 탑승객 정보 (여권 기재명)</div>
+        <div class="form-grid">
+          <div class="form-field-wrap full">
+            <label class="form-field-label">성명 (영문)</label>
+            <input class="form-field" id="pax-name" placeholder="예: HONG GILDONG" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">생년월일</label>
+            <input class="form-field" id="pax-birth" type="text" placeholder="년.월.일" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">국적</label>
+            <input class="form-field" id="pax-nationality" placeholder="예: REPUBLIC OF KOREA" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">여권번호</label>
+            <input class="form-field" id="pax-passport" placeholder="예: M12345678" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">여권 만료일</label>
+            <input class="form-field" id="pax-passport-expiry" type="text" placeholder="년.월.일" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">이메일</label>
+            <input class="form-field" id="pax-email" placeholder="이메일" type="email" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">연락처</label>
+            <input class="form-field" id="pax-phone" placeholder="010-xxxx-xxxx" type="tel" />
+          </div>
+        </div>
+      </div>
+
+      <button class="confirm-btn" id="proceed-btn" type="button">진행하기 →</button>
+    </div>
+
+    <div id="review-section" style="display:none;">
+      <div class="form-card">
+        <div class="form-card-title">🔍 예약 정보 최종 확인</div>
+        <div id="review-content" style="font-size:14px; line-height:2; color:#333;"></div>
+      </div>
+      <button class="confirm-btn" id="confirm-btn" type="button">예약 완료</button>
+    </div>
+
+    <div id="confirmation" class="confirmation" style="display:none;">
+      <div class="check-icon">✅</div>
+      <h2>항공권 예약이 완료되었습니다!</h2>
+      <p>예약 확인번호를 저장해 두세요.</p>
+
+      <div class="booking-id-wrap" id="booking-id-container">
+        <div class="booking-id-item" id="outbound-booking-id-wrap">
+          <span class="booking-id-label">🛫 가는편</span>
+          <span id="booking-id">CODE123</span>
+        </div>
+        <div class="booking-id-item" id="return-booking-id-wrap" style="display:none;">
+          <span class="booking-id-label">🛬 오는편</span>
+          <span id="return-booking-id">CODE456</span>
+        </div>
+      </div>
+
+      <div class="confirm-detail">
+        <div id="confirm-pax-info"></div>
+        <div class="flight-detail-block" id="confirm-flight-detail"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const qp = new URLSearchParams(window.location.search);
+    const sessionId = qp.get('session_id') || 'default';
+    const autobook = qp.get('autobook') === 'true';
+
+    let userInfo = {};
+    try { const r = qp.get('user_info'); if (r) userInfo = JSON.parse(decodeURIComponent(r)); } catch (e) { }
+
+    let selectedIndex = parseInt(qp.get('item_index') || '0');
+    let allFlights = [];
+    let isRoundtrip = false;
+
+    const setProgress = p => document.getElementById('progress-bar').style.width = p + '%';
+    const setStatus = t => document.getElementById('booking-status').textContent = t;
+    const fmtDate = d => d ? d.replace(/-/g, '.') : '-';
+
+    /* ── 1. 데이터 로드 ── */
+    async function loadFlightData() {
+      setStatus('항공편 목록 불러오는 중...'); setProgress(25);
+      try {
+        const res = await fetch(`/api/booking/data?session_id=${sessionId}&type=flight`);
+        const data = await res.json();
+        allFlights = data.items || [];
+        setProgress(65);
+
+        if (!allFlights.length) { setStatus('⚠️ 검색된 항공편이 없습니다'); return; }
+
+        const depDate = userInfo.departure_date || allFlights[0]?.dep_date || '';
+        const retDate = userInfo.return_date || allFlights[0]?.ret_date || '';
+        const guests = userInfo.guests || 1;
+        const origin = allFlights[0]?.origin || '';
+        const dest = allFlights[0]?.destination_kr || allFlights[0]?.destination || '';
+
+        isRoundtrip = !!(retDate && retDate.trim()) || allFlights.some(f => f.is_roundtrip === true);
+
+        // 요약 배지
+        document.getElementById('summary-route').textContent = `${origin} → ${dest}`;
+        document.getElementById('summary-dates').textContent =
+          depDate ? (retDate ? `${fmtDate(depDate)} → ${fmtDate(retDate)}` : `${fmtDate(depDate)} (편도)`) : '날짜 미입력';
+        document.getElementById('summary-guests').textContent = guests + '명';
+        document.getElementById('booking-summary').style.display = 'flex';
+
+        // 폼 채우기
+        document.getElementById('dep-date').value = depDate;
+        document.getElementById('ret-date').value = retDate;
+        document.getElementById('pax-count').value = guests;
+        document.getElementById('pax-name').value = userInfo.name || '';
+        document.getElementById('pax-birth').value = userInfo.birth ? userInfo.birth.replace(/-/g, '.') : '';
+        document.getElementById('pax-passport').value = userInfo.passport || '';
+        document.getElementById('pax-email').value = userInfo.email || '';
+        document.getElementById('pax-phone').value = userInfo.phone || '';
+
+        document.getElementById('pax-nationality').value = userInfo.nationality || "REPUBLIC OF KOREA";
+        document.getElementById('pax-passport-expiry').value = userInfo.passport_expiry || "2032.10.12";
+
+        // 카드 렌더링
+        renderFlightList(allFlights);
+        document.getElementById('flight-count').textContent = allFlights.length + '개';
+
+        setProgress(90); setStatus('예약 페이지 준비 완료');
+
+        if (autobook) {
+          await new Promise(r => setTimeout(r, 1200));
+          startAutoBooking();
+        }
+      } catch (e) { setStatus('⚠️ 데이터 로드 실패'); }
+    }
+
+    /* ── 2. 카드 렌더링 ── */
+    function renderFlightList(flights) {
+      const el = document.getElementById('flight-list');
+      el.innerHTML = '';
+      flights.forEach((f, i) => {
+        const card = document.createElement('div');
+        card.className = 'flight-card' + (i === selectedIndex ? ' selected' : '');
+
+        const isDirect = (f.stops === '직항' || f.stops === '0' || f.stops === 0);
+        const stopTag = isDirect
+          ? `<span class="ftag direct">✈ 직항</span>`
+          : `<span class="ftag stopover">🔄 ${f.stops || '경유'}</span>`;
+        const cabinTag = f.cabin ? `<span class="ftag">💺 ${f.cabin}</span>` : '';
+        const bagTag = f.baggage ? `<span class="ftag">🧳 ${f.baggage}</span>` : '';
+        const rtTag = f.is_roundtrip ? `<span class="ftag" style="background:#e8f0fe;color:#1a73e8;border-color:#c5d9f7">🔁 왕복</span>` : `<span class="ftag">➡ 편도</span>`;
+
+        const airlineTitle = f.flight_number
+          ? `${f.airline || '항공사 미상'} <span style="font-weight:400;font-size:12px;color:#888">${f.flight_number}</span>`
+          : (f.airline || '항공사 미상');
+
+        const outDepVal = f.dep_time || '-';
+        const outArrVal = f.dep_arr_time || '-';
+
+        let returnRow = '';
+        if (f.is_roundtrip) {
+          const retDepVal = f.ret_dep_time || (f.ret_date || '-');
+          const retArrVal = f.ret_arr_time || '-';
+          returnRow = `
+          <div style="border-top:1px dashed #e8eaf0;margin:6px 0;"></div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px;">🛬 오는편 &nbsp;${f.destination || ''}→${f.origin || ''}</div>
+          <div class="flight-times">
+            <div class="time-block">
+              <div class="time-label">출발</div>
+              <div class="time-val">${retDepVal}</div>
+            </div>
+            <div class="time-block" style="text-align:right">
+              <div class="time-label">도착</div>
+              <div class="time-val">${retArrVal}</div>
+            </div>
+          </div>`;
+        }
+
+        card.innerHTML = `
+        <div class="flight-top">
+          <div class="flight-airline">${airlineTitle}</div>
+          <div class="flight-price">${f.price || '가격 미정'}</div>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">🛫 가는편 &nbsp;${f.origin || ''}→${f.destination || ''}</div>
+        <div class="flight-times">
+          <div class="time-block">
+            <div class="time-label">출발</div>
+            <div class="time-val">${outDepVal}</div>
+          </div>
+          <div class="time-block" style="text-align:right">
+            <div class="time-label">도착</div>
+            <div class="time-val">${outArrVal}</div>
+          </div>
+        </div>
+        ${returnRow}
+        <div style="margin-top:8px;" class="flight-tags">${rtTag}${stopTag}${cabinTag}${bagTag}</div>`;
+
+        card.addEventListener('click', () => {
+          selectedIndex = i;
+          document.querySelectorAll('.flight-card').forEach((c, j) => c.classList.toggle('selected', j === i));
+          if (!autobook) showFormAndAutoFill();
+        });
+        el.appendChild(card);
+      });
+    }
+
+    /* ── 3. 유틸 함수 ── */
+    async function typeInField(id, text, delay = 100) {
+      const f = document.getElementById(id); if (!f) return;
+      f.classList.add('auto-typing'); f.value = ''; f.focus();
+      for (let c of text) { f.value += c; await new Promise(r => setTimeout(r, delay)); }
+      await new Promise(r => setTimeout(r, 280)); f.classList.remove('auto-typing');
+    }
+    function showClick(el) {
+      const rc = el.getBoundingClientRect(), d = document.createElement('div');
+      d.className = 'click-pointer';
+      d.style.left = (rc.left + rc.width / 2 - 14) + 'px'; d.style.top = (rc.top + rc.height / 2 - 14) + 'px';
+      document.body.appendChild(d); setTimeout(() => d.remove(), 700);
+    }
+
+    /* ── 4-A. 자동 예약 시작 ── */
+    async function startAutoBooking() {
+      setStatus('🤖 항공편을 선택하고 있어요...');
+      const cards = document.getElementById('flight-list').querySelectorAll('.flight-card');
+      if (cards[selectedIndex]) {
+        cards[selectedIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        await new Promise(r => setTimeout(r, 700));
+        showClick(cards[selectedIndex]);
+        await new Promise(r => setTimeout(r, 500));
+      }
+      await showFormAndAutoFill();
+    }
+
+    /* ── 4-B. 폼 표시 & 자동 입력 ── */
+    async function showFormAndAutoFill() {
+      document.getElementById('booking-form-section').style.display = 'block';
+      document.getElementById('booking-form-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await new Promise(r => setTimeout(r, 600));
+
+      setStatus('🤖 탑승객 정보 입력 중...');
+      const toFill = [['pax-name', userInfo.name || '']];
+      for (const [id, val] of toFill) {
+        const f = document.getElementById(id);
+        if (f && f.value) {
+          f.classList.add('auto-typing'); await new Promise(r => setTimeout(r, 500)); f.classList.remove('auto-typing');
+          await new Promise(r => setTimeout(r, 200));
+        } else if (f && val) {
+          await typeInField(id, val, 90); await new Promise(r => setTimeout(r, 350));
+        }
+      }
+      for (const id of ['pax-birth', 'pax-nationality', 'pax-passport-expiry']) {
+        const f = document.getElementById(id); if (!f) continue;
+        f.classList.add('auto-typing'); await new Promise(r => setTimeout(r, 650)); f.classList.remove('auto-typing'); await new Promise(r => setTimeout(r, 200));
+      }
+
+      setStatus('🤖 날짜 확인 중...');
+      for (const id of ['dep-date', 'ret-date']) {
+        const f = document.getElementById(id); if (!f) continue;
+        f.classList.add('auto-typing'); await new Promise(r => setTimeout(r, 650)); f.classList.remove('auto-typing'); await new Promise(r => setTimeout(r, 200));
+      }
+      setStatus('✏️ 정보가 맞는지 확인 후 진행하기를 눌러주세요.'); setProgress(85);
+
+      if (autobook) {
+        await new Promise(r => setTimeout(r, 1000));
+        await showReviewAndConfirm();
+      }
+    }
+
+    /* ── 4-C. 최종 확인 화면 표시 및 예약 버튼 클릭 ── */
+    async function showReviewAndConfirm() {
+      const flight = allFlights[selectedIndex] || {};
+      const isRT = isRoundtrip || flight.is_roundtrip || false;
+
+      const rows = [
+        { label: '🛫 가는편', value: `${flight.airline || '-'} | ${flight.origin || ''} → ${flight.destination || ''} | ${flight.dep_time || '-'} → ${flight.dep_arr_time || '-'}` },
+        ...(isRT ? [{ label: '🛬 오는편', value: `${flight.airline || '-'} | ${flight.destination || ''} → ${flight.origin || ''} | ${flight.ret_dep_time || '-'} → ${flight.ret_arr_time || '-'}` }] : []),
+        { label: '💰 가격', value: flight.price || '가격 정보 없음' },
+        { label: '📅 출국일', value: document.getElementById('dep-date').value || '-' },
+        ...(document.getElementById('ret-date').value ? [{ label: '📅 귀국일', value: document.getElementById('ret-date').value }] : []),
+        { label: '👤 성명', value: document.getElementById('pax-name').value || '-' },
+        { label: '🎂 생년월일', value: document.getElementById('pax-birth').value || '-' },
+        { label: '国 국적', value: document.getElementById('pax-nationality').value || '-' },
+        { label: '🛂 여권번호', value: document.getElementById('pax-passport').value || '-' },
+        { label: '📅 만료일', value: document.getElementById('pax-passport-expiry').value || '-' },
+        { label: '📧 이메일', value: document.getElementById('pax-email').value || '-' },
+        { label: '📞 연락처', value: document.getElementById('pax-phone').value || '-' },
+        { label: '👥 인원', value: document.getElementById('pax-count').value + '명' },
+      ];
+
+      const reviewContent = document.getElementById('review-content');
+      reviewContent.innerHTML = rows.map((r, i) =>
+        `<div id="review-row-${i}" style="display:flex; gap:12px; padding:6px 8px; border-radius:8px; transition:background .3s;">
+          <span style="color:#888; min-width:90px;">${r.label}</span>
+          <span style="font-weight:600;">${r.value}</span>
+        </div>`
+      ).join('');
+
+      document.getElementById('booking-form-section').style.display = 'none';
+      document.getElementById('flight-list-section').style.display = 'none';
+      document.getElementById('review-section').style.display = 'block';
+      document.getElementById('review-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setStatus('🤖 예약 정보를 확인하고 있어요...'); setProgress(90);
+
+      if (autobook) {
+        await new Promise(r => setTimeout(r, 800));
+        for (let i = 0; i < rows.length; i++) {
+          const row = document.getElementById(`review-row-${i}`);
+          if (!row) continue;
+          row.style.background = '#e8f0fe';
+          row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          await new Promise(r => setTimeout(r, 500));
+          row.style.background = '';
+        }
+
+        await new Promise(r => setTimeout(r, 600));
+        setStatus('🤖 예약 완료 버튼 클릭 중...'); setProgress(95);
+        const btn = document.getElementById('confirm-btn');
+        btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        await new Promise(r => setTimeout(r, 400));
+        showClick(btn); btn.style.transform = 'scale(.97)';
+        await new Promise(r => setTimeout(r, 300)); btn.style.transform = '';
+        await new Promise(r => setTimeout(r, 500)); await submitBooking();
+      }
+    }
+
+    /* ── 5. 예약 제출 (완료 화면 업데이트 포함) ── */
+    async function submitBooking() {
+      setStatus('⏳ 예약 처리 중...');
+      try {
+        const flight = allFlights[selectedIndex] || {};
+        const isRT = isRoundtrip || flight.is_roundtrip || false;
+        const airlineLabel = flight.flight_number
+          ? `${flight.airline || ''} (${flight.flight_number})`
+          : (flight.airline || '');
+
+        const res = await fetch('/booking/confirm', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId, booking_type: 'flight',
+            item_index: selectedIndex,
+            passenger_info: {
+              name: document.getElementById('pax-name').value,
+              birth: document.getElementById('pax-birth').value,
+              nationality: document.getElementById('pax-nationality') ? document.getElementById('pax-nationality').value : '',
+              passport: document.getElementById('pax-passport').value,
+              passport_expiry: document.getElementById('pax-passport-expiry') ? document.getElementById('pax-passport-expiry').value : '',
+              email: document.getElementById('pax-email').value,
+              phone: document.getElementById('pax-phone').value,
+              departure_date: document.getElementById('dep-date').value,
+              return_date: document.getElementById('ret-date').value,
+              guests: document.getElementById('pax-count').value,
+              airline: airlineLabel,
+              route: `${flight.origin || ''} → ${flight.destination || ''}`,
+              is_roundtrip: isRT,
+              origin: flight.origin || '',
+              destination: flight.destination || '',
+
+              // 시간 및 소요시간 전송
+              dep_time: flight.dep_time || '',
+              dep_arr_time: flight.dep_arr_time || '',
+              duration: flight.duration || '',
+              ret_dep_time: flight.ret_dep_time || '',
+              ret_arr_time: flight.ret_arr_time || '',
+              ret_duration: flight.ret_duration || '',
+
+              cabin: flight.cabin || '이코노미',
+              baggage: flight.baggage || '위탁 1개(23kg)',
+              aircraft: 'A350-900',
+            }
+          })
+        });
+        const result = await res.json();
+        await new Promise(r => setTimeout(r, 400)); setProgress(100);
+
+        document.getElementById('booking-form-section').style.display = 'none';
+        document.getElementById('flight-list-section').style.display = 'none';
+        document.getElementById('booking-summary').style.display = 'none';
+        document.getElementById('review-section').style.display = 'none';
+        document.getElementById('confirmation').style.display = 'block';
+        setStatus('✅ 예약 완료!');
+
+        const info = result.passenger_info || {};
+
+        document.getElementById('booking-id').textContent = result.booking_id;
+        if (isRT && result.return_booking_id) {
+          document.getElementById('return-booking-id').textContent = result.return_booking_id;
+          document.getElementById('return-booking-id-wrap').style.display = 'block';
+        } else {
+          document.getElementById('return-booking-id-wrap').style.display = 'none';
+        }
+
+        // 탑승객 정보 노출
+        document.getElementById('confirm-pax-info').innerHTML = `
+        <strong>✈️ 항공사</strong>: ${info.airline || '-'}<br>
+        <strong>📍 구간</strong>: ${info.route || '-'}<br>
+        <strong>👤 탑승객</strong>: ${info.name || '-'} (${info.guests || 1}명)<br>
+        <strong>🎂 생년월일</strong>: ${info.birth || '-'}<br>
+        ${info.nationality ? `<strong>国 국적</strong>: ${info.nationality}<br>` : ''}
+        <strong>🛂 여권번호</strong>: ${info.passport || '-'} ${info.passport_expiry ? `(만료: ${info.passport_expiry})` : ''}<br>
+        <strong>📞 연락처</strong>: ${info.phone || '-'}<br>
+        <strong>📧 이메일</strong>: ${info.email || '-'}`;
+
+        // 완료 화면에 상세 항공 정보 출력 (시간 및 소요시간 포함)
+        const flightDetailHtml = `
+          <div class="flight-segment">
+            <div class="flight-segment-title">🛫 가는편 [${airlineLabel}]</div>
+            <div class="flight-segment-route">${info.origin} → ${info.destination}</div>
+            <div class="flight-times-detail">
+              <span>출발: ${info.dep_time || '-'}</span>
+              <span>도착: ${info.dep_arr_time || '-'}</span>
+              <span style="color:#1a73e8; font-weight:600;">⏱ 소요: ${info.duration || '-'}</span>
+            </div>
+            <div class="flight-more-info">
+              <span class="flight-more-info-item">✈ ${info.aircraft || 'A350-900'}</span>
+              <span class="flight-more-info-item">💺 ${info.cabin || '이코노미'}</span>
+              <span class="flight-more-info-item">🧳 ${info.baggage || '수하물 포함'}</span>
+            </div>
+          </div>
+          ${info.is_roundtrip ? `
+          <div class="flight-segment" style="margin-top:16px;">
+            <div class="flight-segment-title">🛬 오는편 [${airlineLabel}]</div>
+            <div class="flight-segment-route">${info.destination} → ${info.origin}</div>
+            <div class="flight-times-detail">
+              <span>출발: ${info.ret_dep_time || '-'}</span>
+              <span>도착: ${info.ret_arr_time || '-'}</span>
+              <span style="color:#1a73e8; font-weight:600;">⏱ 소요: ${info.ret_duration || '-'}</span>
+            </div>
+            <div class="flight-more-info">
+              <span class="flight-more-info-item">✈ ${info.aircraft || 'A350-900'}</span>
+              <span class="flight-more-info-item">💺 ${info.cabin || '이코노미'}</span>
+              <span class="flight-more-info-item">🧳 ${info.baggage || '수하물 포함'}</span>
+            </div>
+          </div>
+          ` : ''}
+        `;
+        document.getElementById('confirm-flight-detail').innerHTML = flightDetailHtml;
+
+        if (window.parent !== window)
+          window.parent.postMessage({ type: 'booking_complete', booking_id: result.booking_id, booking_type: 'flight' }, '*');
+      } catch (e) { setStatus('⚠️ 예약 처리 중 오류 발생'); }
+    }
+
+    document.getElementById('proceed-btn').addEventListener('click', showReviewAndConfirm);
+    document.getElementById('confirm-btn').addEventListener('click', submitBooking);
+    loadFlightData();
+  </script>
+</body>
+
+</html>

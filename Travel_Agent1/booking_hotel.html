@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InsighTravel - 호텔 예약</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #f7f8fa;
+      color: #1a1a2e;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    .booking-container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 28px 20px 56px;
+    }
+
+    /* 헤더 */
+    .page-header {
+      text-align: center;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 2px solid #e8eaf0;
+    }
+
+    .logo {
+      font-size: 21px;
+      font-weight: 800;
+      color: #1a73e8;
+      letter-spacing: -.5px;
+    }
+
+    .logo span {
+      color: #f59e0b;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    #booking-status {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 10px;
+      background: #e8f0fe;
+      color: #1a73e8;
+      transition: all .3s;
+    }
+
+    .progress-bar-wrap {
+      background: #e8f0fe;
+      border-radius: 999px;
+      height: 4px;
+      margin: 8px 0 0;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: #1a73e8;
+      border-radius: 999px;
+      width: 0%;
+      transition: width .4s ease;
+    }
+
+    /* 예약 요약 배지 */
+    .booking-summary {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      justify-content: center;
+    }
+
+    .summary-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: #444;
+      font-weight: 500;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .05);
+    }
+
+    /* 섹션 제목 */
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-count {
+      font-size: 12px;
+      font-weight: 500;
+      color: #888;
+      background: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    /* 숙소 카드 */
+    .hotel-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .hotel-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px 18px;
+      border: 2px solid #e8eaf0;
+      cursor: pointer;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .05);
+      position: relative;
+    }
+
+    .hotel-card:hover {
+      border-color: #1a73e8;
+      box-shadow: 0 4px 16px rgba(26, 115, 232, .12);
+      transform: translateY(-1px);
+    }
+
+    .hotel-card.selected {
+      border-color: #1a73e8;
+      background: #f0f6ff;
+      box-shadow: 0 4px 18px rgba(26, 115, 232, .18);
+    }
+
+    .hotel-card.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      background: #1a73e8;
+      color: #fff;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hotel-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .hotel-card-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      line-height: 1.3;
+      flex: 1;
+      padding-right: 30px;
+    }
+
+    .hotel-price-tag {
+      font-size: 16px;
+      font-weight: 800;
+      color: #f59e0b;
+      white-space: nowrap;
+    }
+
+    .hotel-card-meta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .hotel-card-meta .meta {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .source-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: auto;
+    }
+
+    .source-badge.booking {
+      background: #003580;
+      color: #fff;
+    }
+
+    .source-badge.amadeus {
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
+
+    .source-badge.tripadvisor {
+      background: #34e0a1;
+      color: #006245;
+    }
+
+    .source-badge.default {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    /* 폼 */
+    .form-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 20px 18px;
+      border: 1px solid #e8eaf0;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .05);
+    }
+
+    .form-card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .form-grid .full {
+      grid-column: 1 / -1;
+    }
+
+    .form-field-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .form-field-label {
+      font-size: 11px;
+      color: #888;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+
+    .form-field {
+      background: #fff;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 9px;
+      padding: 10px 12px;
+      width: 100%;
+      color: #222;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .form-field::placeholder {
+      color: #bbb;
+    }
+
+    .form-field:focus {
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, .1);
+    }
+
+    .auto-typing {
+      border-color: #f59e0b !important;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, .15) !important;
+    }
+
+    .confirm-btn {
+      width: 100%;
+      padding: 14px;
+      background: #1a73e8;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      box-shadow: 0 2px 12px rgba(26, 115, 232, .22);
+      transition: background .2s, transform .15s, box-shadow .2s;
+    }
+
+    .confirm-btn:hover {
+      background: #1557b0;
+      box-shadow: 0 4px 20px rgba(26, 115, 232, .32);
+    }
+
+    .click-pointer {
+      position: fixed;
+      width: 28px;
+      height: 28px;
+      background: radial-gradient(circle, rgba(26, 115, 232, .8), rgba(26, 115, 232, 0));
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9999;
+      animation: clickPulse .6s ease-out forwards;
+    }
+
+    @keyframes clickPulse {
+      0% {
+        transform: scale(.5);
+        opacity: 1
+      }
+
+      100% {
+        transform: scale(3);
+        opacity: 0
+      }
+    }
+
+    /* 확인 화면 */
+    .confirmation {
+      text-align: center;
+      padding: 44px 20px;
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid #e8eaf0;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+      animation: fadeInUp .5s ease-out;
+    }
+
+    .confirmation .check-icon {
+      font-size: 60px;
+      margin-bottom: 14px;
+      animation: popIn .5s cubic-bezier(.68, -.55, .265, 1.55);
+    }
+
+    .confirmation h2 {
+      font-size: 21px;
+      font-weight: 700;
+      color: #1a73e8;
+      margin-bottom: 6px;
+    }
+
+    .confirmation p {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+
+    .booking-id-display {
+      display: inline-block;
+      padding: 10px 24px;
+      border-radius: 10px;
+      background: #e8f0fe;
+      color: #1a73e8;
+      font-size: 19px;
+      font-weight: 700;
+      font-family: monospace;
+      letter-spacing: 2px;
+    }
+
+    .confirm-detail {
+      margin-top: 18px;
+      background: #f7f8fa;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #555;
+      text-align: left;
+      line-height: 1.9;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(18px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    @keyframes popIn {
+      0% {
+        transform: scale(0)
+      }
+
+      100% {
+        transform: scale(1)
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="booking-container">
+
+    <!-- 헤더 -->
+    <div class="page-header">
+      <div class="logo">Insigh<span>Travel</span> Booking</div>
+      <p class="subtitle">🏨 Hotel Reservation</p>
+      <div id="booking-status">숙소 정보 불러오는 중...</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+    </div>
+
+    <!-- 예약 요약 배지 -->
+    <div class="booking-summary" id="booking-summary" style="display:none;">
+      <div class="summary-badge">📍 <span id="summary-dest">-</span></div>
+      <div class="summary-badge">📅 <span id="summary-dates">-</span></div>
+      <div class="summary-badge">👥 <span id="summary-guests">-</span></div>
+    </div>
+
+    <!-- 숙소 목록 -->
+    <div id="hotel-list-section">
+      <div class="section-title">검색된 숙소 <span class="section-count" id="hotel-count">0개</span></div>
+      <div class="hotel-list" id="hotel-list"></div>
+    </div>
+
+    <!-- 예약 폼 -->
+    <div id="booking-form-section">
+      <div class="form-card">
+        <div class="form-card-title">📋 투숙객 정보</div>
+        <div class="form-grid">
+          <div class="form-field-wrap full">
+            <label class="form-field-label">대표 투숙객 성명</label>
+            <input class="form-field" id="guest-name" placeholder="예: 홍길동" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">이메일</label>
+            <input class="form-field" id="guest-email" placeholder="이메일 주소" type="email" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">연락처</label>
+            <input class="form-field" id="guest-phone" placeholder="010-xxxx-xxxx" type="tel" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">📅 체크인 / 체크아웃 · 인원</div>
+        <div class="form-grid">
+          <div class="form-field-wrap">
+            <label class="form-field-label">체크인</label>
+            <input class="form-field" id="checkin-date" type="date" />
+          </div>
+          <div class="form-field-wrap">
+            <label class="form-field-label">체크아웃</label>
+            <input class="form-field" id="checkout-date" type="date" />
+          </div>
+          <div class="form-field-wrap full">
+            <label class="form-field-label">인원 수</label>
+            <input class="form-field" id="guest-count" type="number" min="1" max="10" value="2" />
+          </div>
+        </div>
+      </div>
+
+      <button class="confirm-btn" id="confirm-btn" type="button">예약 확인하기</button>
+    </div>
+
+    <!-- 예약 완료 -->
+    <div id="confirmation" class="confirmation" style="display:none;">
+      <div class="check-icon">✅</div>
+      <h2>호텔 예약이 완료되었습니다!</h2>
+      <p>예약 확인번호를 저장해 두세요.</p>
+      <div class="booking-id-display" id="booking-id">-</div>
+      <div class="confirm-detail" id="confirm-detail"></div>
+    </div>
+
+  </div>
+  <script>
+    const qp = new URLSearchParams(window.location.search);
+    const sessionId = qp.get('session_id') || 'default';
+    const autobook = qp.get('autobook') === 'true';
+
+    let userInfo = {};
+    try { const r = qp.get('user_info'); if (r) userInfo = JSON.parse(decodeURIComponent(r)); } catch (e) { }
+
+    let selectedIndex = parseInt(qp.get('item_index') || '0');
+    let allHotels = [];
+
+    const setProgress = p => document.getElementById('progress-bar').style.width = p + '%';
+    const setStatus = t => document.getElementById('booking-status').textContent = t;
+    const fmtDate = d => d ? d.replace(/-/g, '.') : '-';
+
+    function sourceBadgeClass(src) {
+      if (!src) return 'default';
+      const s = src.toLowerCase();
+      if (s.includes('booking')) return 'booking';
+      if (s.includes('amadeus')) return 'amadeus';
+      if (s.includes('tripadvisor')) return 'tripadvisor';
+      return 'default';
+    }
+
+    /* ── 1. 데이터 로드 ── */
+    async function loadHotelData() {
+      setStatus('숙소 목록 불러오는 중...'); setProgress(25);
+      try {
+        const res = await fetch(`/api/booking/data?session_id=${sessionId}&type=hotel`);
+        const data = await res.json();
+        allHotels = data.items || [];
+        setProgress(65);
+
+        if (!allHotels.length) { setStatus('⚠️ 검색된 숙소가 없습니다'); return; }
+
+        // 요약 배지
+        const checkin = userInfo.checkin || '';
+        const checkout = userInfo.checkout || '';
+        const guests = userInfo.guests || 2;
+        document.getElementById('summary-dest').textContent = allHotels[0]?.destination_kr || '목적지';
+        document.getElementById('summary-dates').textContent =
+          (checkin && checkout) ? `${fmtDate(checkin)} → ${fmtDate(checkout)}` : '날짜 미입력';
+        document.getElementById('summary-guests').textContent = guests + '명';
+        document.getElementById('booking-summary').style.display = 'flex';
+
+        // 폼 채우기
+        document.getElementById('checkin-date').value = checkin;
+        document.getElementById('checkout-date').value = checkout;
+        document.getElementById('guest-count').value = guests;
+        document.getElementById('guest-name').value = userInfo.name || '';
+        document.getElementById('guest-email').value = userInfo.email || '';
+        document.getElementById('guest-phone').value = userInfo.phone || '';
+
+        renderHotelList(allHotels);
+        document.getElementById('hotel-count').textContent = allHotels.length + '개';
+        setProgress(90); setStatus('예약 페이지 준비 완료');
+
+        if (autobook) { await new Promise(r => setTimeout(r, 1200)); startAutoBooking(); }
+      } catch (e) { setStatus('⚠️ 데이터 로드 실패'); }
+    }
+
+    /* ── 2. 카드 렌더링 ── */
+    function renderHotelList(hotels) {
+      const el = document.getElementById('hotel-list');
+      el.innerHTML = '';
+      hotels.forEach((h, i) => {
+        const card = document.createElement('div');
+        card.className = 'hotel-card' + (i === selectedIndex ? ' selected' : '');
+        const sc = sourceBadgeClass(h.source);
+        card.innerHTML = `
+        <div class="hotel-card-top">
+          <div class="hotel-card-name">${h.name || '이름 없음'}</div>
+          <div class="hotel-price-tag">${h.price || '가격 미정'}</div>
+        </div>
+        <div class="hotel-card-meta">
+          ${h.rating ? `<div class="meta">⭐ ${h.rating}</div>` : ''}
+          ${h.address ? `<div class="meta">📍 ${h.address}</div>` : ''}
+          <span class="source-badge ${sc}">${h.source || '-'}</span>
+        </div>`;
+        card.addEventListener('click', () => {
+          selectedIndex = i;
+          document.querySelectorAll('.hotel-card').forEach((c, j) => c.classList.toggle('selected', j === i));
+        });
+        el.appendChild(card);
+      });
+    }
+
+    /* ── 3. 타이핑 ── */
+    async function typeInField(id, text, delay = 100) {
+      const f = document.getElementById(id); if (!f) return;
+      f.classList.add('auto-typing'); f.value = ''; f.focus();
+      for (let c of text) { f.value += c; await new Promise(r => setTimeout(r, delay)); }
+      await new Promise(r => setTimeout(r, 280)); f.classList.remove('auto-typing');
+    }
+    function showClick(el) {
+      const rc = el.getBoundingClientRect(), d = document.createElement('div');
+      d.className = 'click-pointer';
+      d.style.left = (rc.left + rc.width / 2 - 14) + 'px'; d.style.top = (rc.top + rc.height / 2 - 14) + 'px';
+      document.body.appendChild(d); setTimeout(() => d.remove(), 700);
+    }
+
+    /* ── 4. 자동 예약 ── */
+    async function startAutoBooking() {
+      const cards = document.querySelectorAll('.hotel-card');
+      if (cards[selectedIndex]) {
+        cards[selectedIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        await new Promise(r => setTimeout(r, 600));
+        showClick(cards[selectedIndex]); await new Promise(r => setTimeout(r, 500));
+      }
+      setStatus('🤖 투숙객 정보 확인 중...');
+      // 이미 채워져 있으면 강조만
+      for (const id of ['guest-name', 'guest-email', 'guest-phone']) {
+        const f = document.getElementById(id);
+        if (f && !f.value && userInfo[id.replace('guest-', '')]) {
+          await typeInField(id, userInfo[id.replace('guest-', '')] || '', 90);
+          await new Promise(r => setTimeout(r, 350));
+        } else if (f && f.value) {
+          f.classList.add('auto-typing'); await new Promise(r => setTimeout(r, 500)); f.classList.remove('auto-typing');
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+      setStatus('🤖 날짜 확인 중...');
+      for (const id of ['checkin-date', 'checkout-date']) {
+        const f = document.getElementById(id);
+        f.classList.add('auto-typing'); await new Promise(r => setTimeout(r, 650)); f.classList.remove('auto-typing');
+        await new Promise(r => setTimeout(r, 200));
+      }
+      await new Promise(r => setTimeout(r, 800));
+      setStatus('🤖 예약 확인 버튼 클릭 중...'); setProgress(94);
+      const btn = document.getElementById('confirm-btn');
+      showClick(btn); btn.style.transform = 'scale(.97)';
+      await new Promise(r => setTimeout(r, 300)); btn.style.transform = '';
+      await new Promise(r => setTimeout(r, 700)); await submitBooking();
+    }
+
+    /* ── 5. 예약 제출 ── */
+    async function submitBooking() {
+      setStatus('⏳ 예약 처리 중...');
+      try {
+        const hotel = allHotels[selectedIndex] || {};
+        const res = await fetch('/booking/confirm', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId, booking_type: 'hotel', item_index: selectedIndex,
+            passenger_info: {
+              name: document.getElementById('guest-name').value,
+              email: document.getElementById('guest-email').value,
+              phone: document.getElementById('guest-phone').value,
+              checkin: document.getElementById('checkin-date').value,
+              checkout: document.getElementById('checkout-date').value,
+              guests: document.getElementById('guest-count').value,
+              hotel: hotel.name || '',
+            }
+          })
+        });
+        const result = await res.json();
+        await new Promise(r => setTimeout(r, 400)); setProgress(100);
+
+        document.getElementById('booking-form-section').style.display = 'none';
+        document.getElementById('hotel-list-section').style.display = 'none';
+        document.getElementById('booking-summary').style.display = 'none';
+        document.getElementById('confirmation').style.display = 'block';
+        document.getElementById('booking-id').textContent = result.booking_id;
+        setStatus('✅ 예약 완료!');
+
+        const info = result.passenger_info || {};
+        document.getElementById('confirm-detail').innerHTML = `
+        <strong>🏨 숙소</strong>: ${hotel.name || '-'}<br>
+        <strong>👤 투숙객</strong>: ${info.name || '-'} (${info.guests || 1}명)<br>
+        <strong>📅 체크인</strong>: ${fmtDate(info.checkin)}<br>
+        <strong>📅 체크아웃</strong>: ${fmtDate(info.checkout)}<br>
+        <strong>📞 연락처</strong>: ${info.phone || '-'}<br>
+        <strong>📧 이메일</strong>: ${info.email || '-'}`;
+
+        if (window.parent !== window)
+          window.parent.postMessage({ type: 'booking_complete', booking_id: result.booking_id, booking_type: 'hotel' }, '*');
+      } catch (e) { setStatus('⚠️ 예약 처리 중 오류 발생'); }
+    }
+
+    document.getElementById('confirm-btn').addEventListener('click', submitBooking);
+    loadHotelData();
+  </script>
+</body>
+
+</html>

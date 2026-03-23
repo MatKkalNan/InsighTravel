@@ -181,6 +181,309 @@
       background: #f5e9ff;
       color: #6b21a8;
     }
+
+    /* 에이전트 모드 미니브라우저 */
+    .agent-browser {
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 12px 0;
+      border: 1px solid #e0e0e0;
+      max-width: 95%;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      animation: browserSlideIn 0.4s ease-out;
+    }
+
+    @keyframes browserSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .agent-browser-bar {
+      background: #f5f5f5;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #666;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .browser-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-red {
+      background: #ff5f57;
+    }
+
+    .dot-yellow {
+      background: #ffbd2e;
+    }
+
+    .dot-green {
+      background: #28c840;
+    }
+
+    .browser-url {
+      flex: 1;
+      background: #fff;
+      border-radius: 4px;
+      padding: 4px 8px;
+      color: #1a73e8;
+      font-family: monospace;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border: 1px solid #ddd;
+    }
+
+    .agent-browser iframe {
+      width: 100%;
+      height: 560px;
+      border: none;
+      background: #fff;
+    }
+
+    .agent-status {
+      padding: 7px 12px;
+      background: #f0f7ff;
+      color: #1a73e8;
+      font-size: 12px;
+      text-align: center;
+      font-weight: 500;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    /* 모달 공통 */
+    .modal-overlay,
+    .sel-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sel-modal-overlay {
+      z-index: 1001;
+      align-items: flex-start;
+      padding: 32px 12px;
+      overflow-y: auto;
+    }
+
+    .modal-overlay.active,
+    .sel-modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-box,
+    .sel-modal-box {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px 28px 24px;
+      width: 420px;
+      max-width: 95vw;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+      animation: modalIn 0.25s ease-out;
+    }
+
+    .sel-modal-box {
+      width: 520px;
+      padding: 24px 22px 20px;
+    }
+
+    @keyframes modalIn {
+      from {
+        opacity: 0;
+        transform: scale(0.93) translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .modal-title,
+    .sel-modal-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 6px;
+    }
+
+    .modal-subtitle,
+    .sel-modal-subtitle {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    .modal-field-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .modal-field-group .full {
+      grid-column: 1 / -1;
+    }
+
+    .modal-field {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #222;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .modal-field:focus {
+      border-color: #007aff;
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+    }
+
+    .modal-field::placeholder {
+      color: #d0d0d0;
+    }
+
+    .modal-section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 14px 0 8px;
+    }
+
+    .modal-actions,
+    .sel-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .modal-cancel-btn,
+    .sel-cancel-btn {
+      flex: 1;
+      padding: 11px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      background: #fff;
+      color: #444;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .modal-confirm-btn,
+    .sel-confirm-btn {
+      flex: 2;
+      padding: 11px;
+      border-radius: 8px;
+      border: none;
+      background: #007aff;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* 선택 카드 리스트 */
+    .sel-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 380px;
+      overflow-y: auto;
+      margin-bottom: 16px;
+      padding-right: 2px;
+    }
+
+    .sel-card {
+      border: 2px solid #e8eaf0;
+      border-radius: 12px;
+      padding: 13px 15px;
+      cursor: pointer;
+      transition: all .18s;
+      background: #fff;
+      position: relative;
+    }
+
+    .sel-card:hover {
+      border-color: #1a73e8;
+      box-shadow: 0 3px 12px rgba(26, 115, 232, .1);
+    }
+
+    .sel-card.sel-selected {
+      border-color: #1a73e8;
+      background: #f0f6ff;
+    }
+
+    .sel-card.sel-selected::after {
+      content: '✓';
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      background: #1a73e8;
+      color: #fff;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .sel-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+
+    .sel-card-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a1a2e;
+      flex: 1;
+      padding-right: 24px;
+      line-height: 1.3;
+    }
+
+    .sel-card-price {
+      font-size: 15px;
+      font-weight: 800;
+      color: #f59e0b;
+    }
+
+    .sel-card-meta {
+      font-size: 12px;
+      color: #777;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 
@@ -188,55 +491,99 @@
   <div class="container">
     <!-- 채팅 영역 -->
     <div class="chat-panel">
-      <div class="chat-header">
-        ✈️ 여행 에이전트
-      </div>
+      <div class="chat-header">✈️ 여행 에이전트</div>
       <div id="chat-log" class="chat-log"></div>
       <div class="input-panel">
         <textarea id="user-input" placeholder="예시: 3월에 친구랑 3박 4일 오사카 여행 가고 싶은데 뭐부터 정해야 할까?"></textarea>
         <div class="input-row">
-          <div class="hint">
-            엔터: 전송 · 쉬프트+엔터: 줄바꿈
-          </div>
-          <button id="send-btn" class="send-btn" onclick="sendMessage()">
-            보내기
-          </button>
+          <div class="hint">엔터: 전송 · 쉬프트+엔터: 줄바꿈</div>
+          <button id="send-btn" class="send-btn" onclick="sendMessage()">보내기</button>
         </div>
       </div>
     </div>
 
     <!-- 디버그/플랜 영역 -->
     <div class="debug-panel">
-      <div class="debug-header">
-        🔍 Planner / Tool 상태
-      </div>
+      <div class="debug-header">🔍 Planner / Tool 상태</div>
       <div class="debug-body">
-        <div class="debug-row">
-          <span class="debug-label">route:</span>
-          <span id="debug-route" class="route-pill">-</span>
+        <div class="debug-row"><span class="debug-label">route:</span><span id="debug-route" class="route-pill">-</span>
         </div>
-        <div class="debug-row">
-          <span class="debug-label">trip_stage:</span>
-          <span id="debug-stage" class="stage-pill">-</span>
-        </div>
-        <div class="debug-row">
-          <span class="debug-label">plan:</span>
-        </div>
+        <div class="debug-row"><span class="debug-label">trip_stage:</span><span id="debug-stage"
+            class="stage-pill">-</span></div>
+        <div class="debug-row"><span class="debug-label">plan:</span></div>
         <pre id="plan-json">{}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="sel-modal-overlay" id="selection-modal">
+    <div class="sel-modal-box">
+      <div class="sel-modal-title" id="sel-modal-title">항목 선택</div>
+      <div class="sel-modal-subtitle" id="sel-modal-subtitle">원하시는 항목을 클릭해 주세요.</div>
+      <div class="sel-card-list" id="sel-card-list"></div>
+      <div class="sel-actions">
+        <button class="sel-cancel-btn" onclick="cancelSelectionModal()">취소</button>
+        <button class="sel-confirm-btn" onclick="confirmSelectionModal()">예약하기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="booking-modal">
+    <div class="modal-box">
+      <div class="modal-title" id="modal-title">✈️ 예약 진행 전 확인</div>
+      <div class="modal-subtitle" id="modal-subtitle">예약에 필요한 정보를 입력해 주세요.</div>
+
+      <div id="hotel-fields">
+        <div class="modal-section-label">체크인 / 체크아웃 · 인원</div>
+        <div class="modal-field-group">
+          <input class="modal-field" id="m-checkin" placeholder="체크인" type="date" />
+          <input class="modal-field" id="m-checkout" placeholder="체크아웃" type="date" />
+          <input class="modal-field full" id="m-guests" type="number" min="1" max="10" value="2" />
+        </div>
+        <div class="modal-section-label">투숙객 정보</div>
+        <div class="modal-field-group">
+          <input class="modal-field full" id="m-guest-name" placeholder="대표 투숙객 성명 (예: 홍길동)" />
+          <input class="modal-field" id="m-guest-email" placeholder="이메일" type="email" />
+          <input class="modal-field" id="m-guest-phone" placeholder="연락처 (010-xxxx-xxxx)" />
+        </div>
+      </div>
+
+      <div id="flight-fields" style="display:none;">
+        <div class="modal-section-label">출국일 · 귀국일 · 인원</div>
+        <div class="modal-field-group">
+          <input class="modal-field" id="m-dep-date" type="date" />
+          <input class="modal-field" id="m-ret-date" type="date" />
+          <input class="modal-field full" id="m-pax-guests" type="number" min="1" max="10" value="1" />
+        </div>
+        <div class="modal-section-label">탑승객 정보 (여권 기재명)</div>
+        <div class="modal-field-group">
+          <input class="modal-field full" id="m-pax-name" placeholder="성명 (영문, 예: HONG GILDONG)" />
+          <input class="modal-field" id="m-pax-birth" placeholder="생년월일 (년.월.일)" type="text" />
+          <input class="modal-field" id="m-pax-nationality" placeholder="국적 (예: REPUBLIC OF KOREA)" />
+          <input class="modal-field" id="m-pax-passport" placeholder="여권번호 (예: M12345678)" />
+          <input class="modal-field" id="m-pax-passport-expiry" placeholder="여권 만료일 (년.월.일)" type="text" />
+          <input class="modal-field" id="m-pax-email" placeholder="이메일" type="email" />
+          <input class="modal-field" id="m-pax-phone" placeholder="연락처 (010-xxxx-xxxx)" />
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="modal-cancel-btn" onclick="cancelBookingModal()">취소</button>
+        <button class="modal-confirm-btn" onclick="confirmBookingModal()">예약 진행하기</button>
       </div>
     </div>
   </div>
 
   <script>
     // --- [NEW] 세션 ID 생성 (브라우저별 1개 유지) ---
-    let sessionId = localStorage.getItem("travel_session_id");
-    if (!sessionId) {
-      sessionId = "sess-" + Math.random().toString(36).substring(2, 10);
-      localStorage.setItem("travel_session_id", sessionId);
-    }
+    let sessionId = localStorage.getItem("travel_session_id") || "sess-" + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem("travel_session_id", sessionId);
 
     // 최근 대화를 서버로 넘기기 위한 메모리
     let messages = [];
+    let pendingBookingAction = null;
+    let selectionSelectedIndex = 0;
+    let selectionItems = [];
 
     function addMessage(role, text) {
       const chatLog = document.getElementById("chat-log");
@@ -248,19 +595,9 @@
     }
 
     function setDebugInfo(route, plan) {
-      const routeEl = document.getElementById("debug-route");
-      const stageEl = document.getElementById("debug-stage");
-      const planEl = document.getElementById("plan-json");
-
-      routeEl.textContent = route || "-";
-      const stage = (plan && plan.trip_stage) || "ideation";
-      stageEl.textContent = stage;
-
-      try {
-        planEl.textContent = JSON.stringify(plan || {}, null, 2);
-      } catch (e) {
-        planEl.textContent = "{}";
-      }
+      document.getElementById("debug-route").textContent = route || "-";
+      document.getElementById("debug-stage").textContent = (plan && plan.trip_stage) || "ideation";
+      document.getElementById("plan-json").textContent = JSON.stringify(plan || {}, null, 2);
     }
 
     async function sendMessage() {
@@ -269,63 +606,162 @@
       const text = input.value.trim();
       if (!text) return;
 
-      // 화면에 사용자 메시지 추가
       addMessage("user", text);
       messages.push({ role: "user", text });
 
-      // 최근 6턴만 context로 보냄 (모든 tool이 공유)
-      const contextText = messages
-        .slice(-6)
-        .map((m) => `${m.role}: ${m.text}`)
-        .join("\n");
-
-      // 입력창 비우고 버튼 비활성화
+      const contextText = messages.slice(-6).map(m => `${m.role}: ${m.text}`).join("\n");
       input.value = "";
       sendBtn.disabled = true;
 
       try {
         const res = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_id: sessionId,     // 세션 ID 전달 (현재는 서버에서 옵션용)
-            message: text,
-            context: contextText,      // 모든 tool이 알 수 있는 context
-          }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, message: text, context: contextText }),
         });
 
-        if (!res.ok) {
-          throw new Error("Server error: " + res.status);
-        }
-
         const data = await res.json();
-        const reply = data.reply || "";
-        const route = data.route || "-";
-        const plan = data.plan || {};
+        let bookingAction = null;
+        try { bookingAction = JSON.parse(data.reply); } catch (e) { }
 
-        // 화면에 assistant 메시지 추가
-        addMessage("assistant", reply);
-        messages.push({ role: "assistant", text: reply });
-
-        // 디버그 정보 업데이트
-        setDebugInfo(route, plan);
+        if (bookingAction && bookingAction.__booking_action__) {
+          addMessage("assistant", bookingAction.message);
+          messages.push({ role: "assistant", text: bookingAction.message });
+          if (bookingAction.needs_selection) await openSelectionModal(bookingAction);
+          else openBookingModal(bookingAction);
+        } else {
+          addMessage("assistant", data.reply);
+          messages.push({ role: "assistant", text: data.reply });
+        }
+        setDebugInfo(data.route, data.plan);
       } catch (err) {
-        console.error(err);
-        const errMsg = "오류가 발생했어요. 서버 상태를 확인해 주세요.";
-        addMessage("assistant", errMsg);
-        messages.push({ role: "assistant", text: errMsg });
+        addMessage("assistant", "서버 오류가 발생했습니다.");
       } finally {
         sendBtn.disabled = false;
-        document.getElementById("user-input").focus();
       }
     }
 
-    // 엔터: 전송, Shift+Enter: 줄바꿈
-    document.getElementById("user-input").addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
+    // 선택 모달 로직
+    async function openSelectionModal(action) {
+      pendingBookingAction = action;
+      const isHotel = action.booking_type === "hotel";
+      try {
+        const res = await fetch(`/api/booking/data?session_id=${action.session_id}&type=${isHotel ? "hotel" : "flight"}`);
+        selectionItems = (await res.json()).items || [];
+      } catch (e) { selectionItems = []; }
+
+      selectionSelectedIndex = action.item_index || 0;
+      document.getElementById("sel-modal-title").textContent = isHotel ? "🏨 숙소 선택" : "✈️ 항공편 선택";
+      renderSelectionCards(selectionItems, isHotel);
+      document.getElementById("selection-modal").classList.add("active");
+    }
+
+    function renderSelectionCards(items, isHotel) {
+      const listEl = document.getElementById("sel-card-list");
+      listEl.innerHTML = items.length ? "" : '<div style="padding:24px;text-align:center;">결과가 없습니다.</div>';
+
+      items.forEach((item, i) => {
+        const card = document.createElement("div");
+        card.className = "sel-card" + (i === selectionSelectedIndex ? " sel-selected" : "");
+        if (isHotel) {
+          card.innerHTML = `<div class="sel-card-top"><div class="sel-card-name">${item.name}</div><div class="sel-card-price">${item.price}</div></div>`;
+        } else {
+          card.innerHTML = `<div class="sel-card-top"><div class="sel-card-name">${item.airline}</div><div class="sel-card-price">${item.price}</div></div><div class="sel-card-meta"><span>${item.origin}→${item.destination}</span><span>${item.dep_time}</span><span>${item.stops}</span></div>`;
+        }
+        card.addEventListener("click", () => {
+          selectionSelectedIndex = i;
+          document.querySelectorAll(".sel-card").forEach((c, j) => c.classList.toggle("sel-selected", j === i));
+        });
+        listEl.appendChild(card);
+      });
+    }
+
+    function cancelSelectionModal() {
+      document.getElementById("selection-modal").classList.remove("active");
+      addMessage("assistant", "예약을 취소했습니다.");
+    }
+    function confirmSelectionModal() {
+      document.getElementById("selection-modal").classList.remove("active");
+      pendingBookingAction.item_index = selectionSelectedIndex;
+      openBookingModal(pendingBookingAction);
+    }
+
+    // 예약 모달 로직
+    function openBookingModal(action) {
+      pendingBookingAction = action;
+      const isHotel = action.booking_type === "hotel";
+      const pf = action.prefill || {};
+
+      document.getElementById("hotel-fields").style.display = isHotel ? "block" : "none";
+      document.getElementById("flight-fields").style.display = isHotel ? "none" : "block";
+
+      if (isHotel) {
+        document.getElementById("m-checkin").value = pf.checkin || "";
+        document.getElementById("m-checkout").value = pf.checkout || "";
+        document.getElementById("m-guests").value = pf.guests || 2;
+      } else {
+        document.getElementById("m-dep-date").value = pf.departure_date || "";
+        document.getElementById("m-ret-date").value = pf.return_date || "";
+        document.getElementById("m-pax-guests").value = pf.guests || 1;
       }
+      document.getElementById("booking-modal").classList.add("active");
+    }
+
+    function cancelBookingModal() {
+      document.getElementById("booking-modal").classList.remove("active");
+      addMessage("assistant", "예약을 취소했습니다.");
+    }
+
+    function confirmBookingModal() {
+      let userInfo = {};
+      if (pendingBookingAction.booking_type === "hotel") {
+        userInfo = {
+          name: document.getElementById("m-guest-name").value,
+          email: document.getElementById("m-guest-email").value,
+          phone: document.getElementById("m-guest-phone").value,
+          checkin: document.getElementById("m-checkin").value,
+          checkout: document.getElementById("m-checkout").value,
+          guests: document.getElementById("m-guests").value
+        };
+      } else {
+        userInfo = {
+          name: document.getElementById("m-pax-name").value,
+          birth: document.getElementById("m-pax-birth").value,
+          nationality: document.getElementById("m-pax-nationality").value,
+          passport: document.getElementById("m-pax-passport").value,
+          passport_expiry: document.getElementById("m-pax-passport-expiry").value,
+          email: document.getElementById("m-pax-email").value,
+          phone: document.getElementById("m-pax-phone").value,
+          departure_date: document.getElementById("m-dep-date").value,
+          return_date: document.getElementById("m-ret-date").value,
+          guests: document.getElementById("m-pax-guests").value
+        };
+      }
+      document.getElementById("booking-modal").classList.remove("active");
+      showAgentBrowser(pendingBookingAction, userInfo);
+    }
+
+    // 아이프레임 로드
+    function showAgentBrowser(action, userInfo) {
+      const urlPath = action.booking_type === "hotel" ? "hotel" : "flight";
+      const realUrl = `/booking/${urlPath}?session_id=${action.session_id}&item_index=${action.item_index}&autobook=true&user_info=${encodeURIComponent(JSON.stringify(userInfo))}`;
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "agent-browser";
+      wrapper.innerHTML = `
+        <div class="agent-browser-bar"><span class="browser-dot dot-red"></span><span class="browser-dot dot-yellow"></span><span class="browser-dot dot-green"></span></div>
+        <div class="agent-status">예약 사이트 접속 중...</div>
+        <iframe src="${realUrl}"></iframe>`;
+      document.getElementById("chat-log").appendChild(wrapper);
+    }
+
+    window.addEventListener("message", e => {
+      if (e.data && e.data.type === "booking_complete") {
+        addMessage("assistant", `✅ 예약이 완료되었습니다! 확인번호: ${e.data.booking_id}`);
+      }
+    });
+
+    document.getElementById("user-input").addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
   </script>
 </body>
