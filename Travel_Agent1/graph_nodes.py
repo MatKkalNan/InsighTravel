@@ -1,17 +1,4 @@
 # graph_nodes.py
-""" 
-- 수정 (1) 2026-03-04, 요약 모델을 gpt-4-turbo에서 gpt-4o-mini로 변경
-가격, 성능, latency 측면 우세 (gpt-ro-mini > gpt-4-turbo) 
-
-- 수정 (2) 2026-03-04, 고정 포맷 변경
-(기존)
-context -> 3~5줄 요약
-이 부분은 제약 조건(직항/예산/항공사/숙소 선호 등)을 빠뜨릴 확률 높음
-(변경)
-LLM이 요약을 항목별로 채우게 강제
-(테스트 완료) 이상 x
-
-""" 
 import os
 import json
 from typing import Dict, Any
@@ -22,12 +9,13 @@ from openai import OpenAI
 from graph_state import ChatState
 import planner
 import tools
-# [신규] 여행 목표 추출 서비스
 from goal_service import extract_trip_goal_from_text
+
+# 👉 요약 프롬프트 빌더 임포트
+from prompts import build_context_summary_prompt
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 
 # ---------------------------------------------
 # 1) 컨텍스트 요약 노드 (OpenAI)
@@ -37,38 +25,12 @@ def context_node(state: ChatState) -> ChatState:
     if not messages:
         return state
 
-    # 최근 대화 6개 요약 / 롤링 컨텍스트 윈도우, long conversation -> recent messages + compressed summary
     last_msgs = messages[-6:]
     convo_text = "\n".join(f"{m['role']}: {m['content']}" for m in last_msgs)
     current_context = state.get("context", "")
 
-    summary_prompt = f"""
-    너는 여행 대화의 메모리 관리자다.
-    아래 '이전 요약'과 '최근 대화'를 읽고, 반드시 지정한 형식으로만 업데이트된 요약을 작성하라.
-
-    [이전 요약]
-    {current_context}
-
-    [최근 대화]
-    {convo_text}
-
-    [출력 형식 - 반드시 그대로]
-    목적지: <도시/국가 또는 미정>
-    기간: <YYYY-MM-DD ~ YYYY-MM-DD 또는 미정>
-    박/일: <n박 m일 또는 미정>
-    인원: <숫자 또는 미정>
-    출발지: <도시 또는 미정>
-    예산: <상한/범위/통화 또는 미정>
-    항공 조건: <직항/경유/항공사 선호/제외/좌석 등급 등, 없으면 '없음'>
-    숙소 조건: <동네/숙소타입/가격대/후기기준 등, 없으면 '없음'>
-    일정/관심사: <핵심 일정/관심 키워드, 없으면 '없음'>
-    확정된 결정: <확정된 내용만 bullet로, 없으면 '없음'>
-    미해결 질문: <사용자에게 추가로 물어봐야 할 것, 없으면 '없음'>
-
-    규칙:
-    - 최근 대화에서 새로운 정보가 나오면 반영하고, 기존 정보와 충돌하면 '최근'을 우선한다.
-    - 추측하지 말고, 텍스트에 없는 정보는 미정/없음으로 둔다.
-    """
+    # 👉 동적으로 프롬프트 생성
+    summary_prompt = build_context_summary_prompt(current_context, convo_text)
 
     try:
         summary_res = client.chat.completions.create(

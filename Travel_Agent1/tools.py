@@ -3,11 +3,13 @@ import os
 import re
 import json
 from datetime import datetime
-import amadeus
 from typing import Dict, Any, List, Optional
 
 from dotenv import load_dotenv
 from openai import OpenAI
+
+# [✨ 핵심: prompts.py에서 모든 프롬프트 가져오기]
+from prompts import *
 
 # [서비스 모듈 임포트]
 from naver_service import search_places_naver
@@ -57,17 +59,8 @@ def extract_params_with_openai(system_prompt: str, user_message: str, context: s
 # 1. 여행지 아이데이션 (Gemini 창작)
 # -------------------------------------------------------------------
 def run_trip_ideation_tool(user_message: str, context: str) -> str:
-    system_prompt = "당신은 창의적인 여행 큐레이터입니다."
-    user_prompt = f"""
-    [대화 맥락]
-    {context}
-    
-    [사용자 요청]
-    {user_message}
-    
-    사용자의 취향, 예산, 계절감을 고려해 여행지 3~5곳을 추천하고, 그 이유를 매력적으로 설명해 주세요.
-    """
-    return call_gemini(system_prompt, user_prompt, temperature=0.7)
+    user_prompt = build_ideation_user_prompt(context, user_message)
+    return call_gemini(IDEATION_SYSTEM, user_prompt, temperature=0.7)
 
 
 # -------------------------------------------------------------------
@@ -76,12 +69,8 @@ def run_trip_ideation_tool(user_message: str, context: str) -> str:
 def run_itinerary_planner_tool(user_message: str, context: str, weather_data=None) -> str:
     print("RUNNING: Itinerary Planner")
     
-    # 1. 파라미터 추출 (목적지, 한국 여부)
-    param_prompt = """
-    사용자의 요청에서 'destination'과 'is_korea'(한국 여부, boolean)를 추출하세요.
-    JSON 형식으로만 출력: {"destination": "Jeju", "is_korea": true}
-    """
-    params = extract_params_with_openai(param_prompt, user_message, context)
+    # 1. 파라미터 추출
+    params = extract_params_with_openai(ITINERARY_PARAM_PROMPT, user_message, context)
     destination = params.get("destination", "여행지")
     is_korea = params.get("is_korea", False)
 
@@ -105,49 +94,23 @@ def run_itinerary_planner_tool(user_message: str, context: str, weather_data=Non
             for p in n_spots[:5]: places_info += f"- (명소) {p['title']}\n"
             for p in n_food[:5]: places_info += f"- (맛집) {p['title']}\n"
             
-     # 3. [날씨 데이터 처리] 
+    # 3. 날씨 데이터 처리
     weather_info_text = ""
     if weather_data:
-        # JSON 데이터를 텍스트로 변환하여 Gemini가 읽기 좋게 만듦
         weather_info_text = f"\n[실시간 날씨 데이터]\n{json.dumps(weather_data, ensure_ascii=False, indent=2)}"
 
     # 4. 최종 프롬프트 구성 및 Gemini 호출
-    system_prompt = "당신은 전문 여행 플래너입니다. 기상 상황과 동선의 효율성, 장소의 매력을 고려하여 완벽한 일정을 계획합니다."
-    user_prompt = f"""
-    [사용자 요청] {user_message}
-    [검색된 장소 데이터] {places_info}
-    {weather_info_text}
-    
-    [지침]
-    1. 검색된 장소 데이터를 우선적으로 사용하여 일정을 구성하세요.
-    2. [실시간 날씨 데이터]가 있다면 반드시 확인하세요. 
-       - 비 예보가 있다면 박물관, 미술관 등 실내 코스를 추천하세요.
-       - 맑은 날씨라면 공원, 바다 등 야외 활동을 우선 배치하세요.
-       - 기온에 맞는 옷차림 정보나 우산 지참 여부도 짧게 언급해 주세요.
-    3. [필수 포함 사항 - 교통 가이드]
-       -단순히 장소만 나열하지 말고, 장소와 장소 사이의 이동 수단과 예상 소요 시간을 반드시 구체적으로 명시해 주세요.
-       (예시: "A 명소 관광 -> 도보 10분 -> B 식당", "B 식당 -> 버스 15번 (약 20분 소요) -> C 카페")
-       동선이 꼬이지 않도록 구글 맵스 데이터를 기반으로 가장 효율적인 순서를 제안하세요.
-       """
-    return call_gemini(system_prompt, user_prompt, temperature=0.4)
+    user_prompt = build_itinerary_user_prompt(user_message, places_info, weather_info_text)
+    return call_gemini(ITINERARY_SYSTEM, user_prompt, temperature=0.4)
 
 
 # -------------------------------------------------------------------
-# 3. 항공권 검색 (개선됨: 400 에러 방지 로직 추가)
+# 3. 항공권 검색
 # -------------------------------------------------------------------
 def run_flight_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Flight Search")
     
-    # 현재 연도(2026)를 명시하여 과거 날짜 검색 방지
-    current_year = datetime.now().year 
-    
-    param_prompt = f"""
-    항공권 파라미터를 추출하세요. 현재 연도는 {current_year}년입니다.
-    1. origin, destination은 반드시 IATA 공항 코드(3자리 대문자, 예: ICN, PVG, NRT)로 변환하세요.
-    2. departureDate, returnDate는 반드시 YYYY-MM-DD 형식이어야 합니다.
-    3. 사용자가 "3월"이라고만 하면 {current_year}-03-15 정도로 추측하세요.
-    JSON 형식: {{"origin": "ICN", "destination": "PVG", "departureDate": "YYYY-MM-DD", "return_date": "YYYY-MM-DD" or null}}
-    """
+    param_prompt = build_flight_param_prompt()
     params = extract_params_with_openai(param_prompt, user_message, context)
     
     origin = params.get("origin", "ICN")
@@ -161,12 +124,10 @@ def run_flight_search_tool(user_message: str, context: str) -> str:
     print(f"✈️ API 호출 파라미터: {origin} -> {dest}, 날짜: {dep_date}")
 
     try:
-        # flight_service.py의 검색 함수 호출
         flight_data = search_flight_offers(origin, dest, dep_date, ret_date)
     except Exception as e:
         flight_data = f"항공권 검색 중 API 오류가 발생했습니다: {str(e)}"
 
-    # Gemini를 통해 최종 답변 작성
     return summarize_flight_data(user_message, flight_data)
 
 
@@ -176,11 +137,7 @@ def run_flight_search_tool(user_message: str, context: str) -> str:
 def run_stay_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Stay Search")
     
-    param_prompt = """
-    추출: destination, check_in(YYYY-MM-DD), check_out, guests(int).
-    JSON: {"destination": "Seoul", "check_in": "2026-05-01", "check_out": "2026-05-05", "guests": 2}
-    """
-    params = extract_params_with_openai(param_prompt, user_message, context)
+    params = extract_params_with_openai(STAY_PARAM_PROMPT, user_message, context)
     print("[DEBUG] extract_search_params 결과:", params)
     
     destination = params.get("destination")
@@ -191,10 +148,8 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     if not destination:
         return "어느 지역의 숙소를 찾아드릴까요? 도시 이름을 말씀해 주세요."
 
-    ## 다중 API 호출 및 데이터 통합
     all_accommodations = []
 
-    # (A) TripAdvisor
     try:
         ta_results = search_tripadvisor(destination, check_in, check_out)
         if ta_results:
@@ -202,7 +157,6 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
             all_accommodations.extend(ta_results)
     except Exception as e: print(f"TripAdvisor Error: {e}")
 
-    # (B) Booking.com
     try:
         bk_results = search_booking(destination, check_in, check_out, guests)
         if bk_results:
@@ -210,7 +164,6 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
             all_accommodations.extend(bk_results)
     except Exception as e: print(f"Booking.com Error: {e}")
 
-    # (C) Amadeus
     try:
         am_results = search_amadeus(destination, check_in, check_out, guests)
         if am_results:
@@ -218,9 +171,7 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
             all_accommodations.extend(am_results)
     except Exception as e: print(f"Amadeus Error: {e}")
 
-    ## LLM에 전달할 텍스트 구성
     if all_accommodations:
-        # 상위 10개 정도만 추려서 텍스트화
         raw_text = "\n".join([
             f"- [{h.get('source')}] {h.get('name')}: {h.get('price')} (평점: {h.get('rating')})" 
             for h in all_accommodations[:10]
@@ -228,10 +179,8 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     else:
         raw_text = "현재 실시간 검색 결과가 없습니다. 일반적인 숙소 예약 팁을 알려주세요."
 
-    system_msg = "전문 호텔 컨시어지로서, 검색된 목록을 비교하여 최적의 숙소를 추천하세요. 만약 데이터가 없다면 해당 지역의 숙소 예약 전략을 안내하세요."
-    user_msg = f"사용자 요청: {user_message}\n\n[통합 숙소 데이터]\n{raw_text}"
-
-    return call_gemini(system_msg, user_msg)
+    user_msg = build_stay_user_prompt(user_message, raw_text)
+    return call_gemini(STAY_SYSTEM, user_msg)
 
 
 # -------------------------------------------------------------------
@@ -240,11 +189,7 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
 def run_food_spot_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Food/Spot Search")
     
-    param_prompt = """
-    추출 'query' (검색어)와 'place_type' (restaurant 또는 tourist_attraction).
-    JSON: {"query": "상하이 맛집", "place_type": "restaurant"}
-    """
-    params = extract_params_with_openai(param_prompt, user_message, context)
+    params = extract_params_with_openai(FOOD_PARAM_PROMPT, user_message, context)
     query = params.get("query", "")
     
     g_results = search_places_google(query, params.get("place_type"), min_rating=4.0)
@@ -256,29 +201,16 @@ def run_food_spot_search_tool(user_message: str, context: str) -> str:
         n_results = search_places_naver(query)
         data_text = "[Naver Maps]\n" + "\n".join([f"{p['title']} ({p['category']})" for p in n_results])
 
-    return call_gemini("당신은 미식 가이드입니다.", f"요청: {user_message}\n데이터:\n{data_text}")
+    user_prompt = build_food_user_prompt(user_message, data_text)
+    return call_gemini(FOOD_SYSTEM, user_prompt)
 
 # -------------------------------------------------------------------
-# [NEW] 6. 축제/이벤트 검색
+# 6. 축제/이벤트 검색
 # -------------------------------------------------------------------
-
-# tools.py 내 run_event_search_tool 함수 부분
-
 def run_event_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Unified Event/Festival/Culture Search (Domestic & International)")
     
-    current_year = datetime.now().year
-    
-    # 1. OpenAI를 통해 검색에 필요한 파라미터(국가, 지역, 검색어, 날짜) 추출
-    param_prompt = f"""
-    사용자의 요청에서 축제, 행사, 전시회 검색을 위한 파라미터를 추출하세요. 현재 연도는 {current_year}년입니다.
-    - country: "한국" 또는 "해외" (질문 맥락에 따라 판단)
-    - region: 도시나 지역명 (예: 서울, 부산, 파리, 삿포로)
-    - query: 검색어 (구글 검색용 풀 텍스트, 예: "부산 벚꽃 축제", "Paris fashion week")
-    - start_date: 행사 시작 기준일 (YYYY-MM-DD 형식, 모르면 빈 문자열 "")
-    
-    JSON 형식으로만 출력: {{"country": "한국", "region": "서울", "query": "서울 전시회", "start_date": ""}}
-    """
+    param_prompt = build_event_param_prompt(context)
     params = extract_params_with_openai(param_prompt, user_message, context)
     
     country = params.get("country", "한국")
@@ -289,27 +221,22 @@ def run_event_search_tool(user_message: str, context: str) -> str:
     events = []
     source_name = ""
 
-    # 2. 국가 판별에 따른 API 분기 실행
     if country == "한국":
-        # event_service.py에서 정의한 통합 함수 호출 (축제 + 문화시설)
         events = search_korea_festivals_tourapi(region=region, start_date=start_date)
         source_name = "한국관광공사(TourAPI)"
     else:
-        # 해외인 경우 기존 SerpAPI 호출
         events = search_events_serpapi(query)
         source_name = "구글 이벤트(SerpAPI)"
     
-    # 3. 데이터 텍스트화 (두 API의 응답 형식을 고려하여 통합 포맷팅)
     if events:
         data_text = f"🔎 [{source_name} 검색 결과]\n"
-        for idx, ev in enumerate(events[:10], 1): # 최대 10개 표시
-            # 각 API마다 key 값이 조금씩 다를 수 있으므로 안전하게 get 사용
+        for idx, ev in enumerate(events[:10], 1):
             title = ev.get('title', '제목 없음')
             date = ev.get('date', '날짜 정보 없음')
             address = ev.get('address', '위치 정보 없음')
             description = ev.get('description', '')
             link = ev.get('link', '')
-            etype = ev.get('type', '이벤트') # TourAPI에는 type 정보가 있음
+            etype = ev.get('type', '이벤트')
 
             data_text += f"{idx}. [{etype}] {title}\n"
             data_text += f"   📅 일정: {date}\n"
@@ -318,66 +245,40 @@ def run_event_search_tool(user_message: str, context: str) -> str:
             if description and description != "설명 없음":
                 data_text += f"   💬 {description}\n"
             
-            if link: # SerpAPI 등 링크가 있는 경우 표시
+            if link:
                 data_text += f"   🔗 링크: {link}\n"
                 
             data_text += "-" * 30 + "\n"
     else:
         data_text = f"현재 {region if region else country} 지역의 검색된 정보가 없습니다."
 
-    # 4. Gemini에게 데이터를 전달하여 최종 답변 생성
-    system_prompt = "당신은 국내외 축제, 전시, 문화 행사를 꿰뚫고 있는 전문 여행 가이드입니다. 제공된 데이터를 바탕으로 사용자에게 친절하고 상세하게 추천해 주세요."
-    user_prompt = f"사용자 요청: {user_message}\n\n[검색된 실시간 데이터 리스트]\n{data_text}\n\n위 데이터를 분석하여 사용자의 요청에 딱 맞는 추천 답변을 작성해 주세요."
-    
-    return call_gemini(system_prompt, user_prompt, temperature=0.5)
+    user_prompt = build_event_user_prompt(user_message, data_text)
+    return call_gemini(EVENT_SYSTEM, user_prompt, temperature=0.5)
 
-#-----------------------------------------------------------------
-# 7. [NEW] 현지 가이드 (실시간 교통 길찾기 연동 - 대중교통 & 자동차)
+# -------------------------------------------------------------------
+# 7. 현지 가이드 (실시간 교통 길찾기 연동)
 # -------------------------------------------------------------------
 def run_local_guide_tool(user_message: str, context: str) -> str:
     print("RUNNING: Local Guide (With Live Transit & Driving)")
     
-    # 사용자가 특정 장소 간의 이동 방법을 물어봤는지 파악
-    param_prompt = """
-    사용자의 요청이 'A에서 B로 가는 방법'처럼 특정 경로의 교통편을 묻는 것이라면 출발지와 도착지를 추출하세요.
-    경로 질문이 아니면 빈 문자열을 반환하세요.
-    JSON: {"origin": "신주쿠역", "destination": "시부야 스카이"}
-    """
-    params = extract_params_with_openai(param_prompt, user_message, context)
+    params = extract_params_with_openai(LOCAL_GUIDE_PARAM_PROMPT, user_message, context)
     origin = params.get("origin")
     dest = params.get("destination")
     
     transit_data = ""
-    # 출발지/도착지가 모두 있으면 실시간 구글 맵스 API 호출 (대중교통 & 자동차 둘 다)
     if origin and dest:
         print(f"🚌/🚗 대중교통/자동차 실시간 경로 검색: {origin} -> {dest}")
         transit_result = get_directions_info(origin, dest, mode="transit")
         driving_result = get_directions_info(origin, dest, mode="driving")
         transit_data = f"\\n[실시간 대중교통 데이터: {origin} -> {dest}]\\n{transit_result}\\n\\n[실시간 자동차(택시/렌트카) 데이터: {origin} -> {dest}]\\n{driving_result}\\n"
 
-    system_prompt = "당신은 빠삭한 현지 지식을 갖춘 교통/로컬 가이드입니다."
-    user_prompt = f"""
-    [대화 맥락] {context}
-    [사용자 질문] {user_message}
-    {transit_data}
-    
-    위 데이터를 바탕으로 이동 방법(대중교통, 자동차 등)이나 현지 꿀팁(패스권 추천, 도로 상황, 대중교통 주의사항 등)을 상세하고 친절하게 안내해 주세요. 제공된 대중교통 시간과 자동차 시간이 둘다 있다면 비교해서 가장 좋은 방법을 추천해 주세요.
-    """
-    return call_gemini(system_prompt, user_prompt, temperature=0.3)
+    user_prompt = build_local_guide_user_prompt(context, user_message, transit_data)
+    return call_gemini(LOCAL_GUIDE_SYSTEM, user_prompt, temperature=0.3)
 
 # -------------------------------------------------------------------
 # 8. 교통 수단 검색
 # -------------------------------------------------------------------
 def transportation_search(args: dict, context: str = "") -> str:
-    """
-    A -> B 단일 구간 이동 옵션 검색
-    args:
-      - origin (str)
-      - destination (str)
-      - mode (str, optional): TRANSIT/WALK/DRIVE/BICYCLE/ALL or 한국어 별칭(도보/대중교통/자동차/전체)
-      - modes (list[str], optional): ["TRANSIT","WALK","DRIVE"] 처럼 명시 (mode보다 우선순위 낮게)
-      - departure_time_iso (str, optional)
-    """
     args = args or {}
     origin = (args.get("origin") or "").strip()
     destination = (args.get("destination") or "").strip()
@@ -400,19 +301,10 @@ def transportation_search(args: dict, context: str = "") -> str:
         departure_time_iso=departure_time_iso,
     )
 
-
 def transportation_batch(args: dict, context: str = "") -> str:
-    """
-    일정(장소 리스트)의 인접 구간 이동시간을 한 번에 계산
-    args:
-      - stops (list[str])  # ["도쿄역","센소지","시부야"] ...
-      - mode (str, optional): TRANSIT/WALK/DRIVE/BICYCLE (ALL은 TRANSIT으로 처리됨)
-      - departure_time_iso (str, optional)
-    """
     args = args or {}
     stops = args.get("stops") or []
     if isinstance(stops, str):
-        # 혹시 문자열로 오면 쉼표로 분해
         stops = [s.strip() for s in stops.split(",") if s.strip()]
 
     if not isinstance(stops, list) or len(stops) < 2:
@@ -433,51 +325,22 @@ def transportation_batch(args: dict, context: str = "") -> str:
 # -------------------------------------------------------------------
 # 9. 여행 주의 경보
 # -------------------------------------------------------------------
-
 def run_travel_warning_tool(user_message: str, context: str) -> str:
     country = user_message.strip()
     return render_travel_warning(country)
 
 # -------------------------------------------------------------------
-# 10. [NEW] 예약 실행 (에이전트 모드 트리거)
+# 10. 예약 실행 (에이전트 모드 트리거)
 # -------------------------------------------------------------------
 def run_booking_action_tool(user_message: str, context: str) -> str:
-    """사용자가 '예약해줘'라고 할 때 실시간 검색 후 에이전트 모드를 트리거"""
     print("RUNNING: Booking Action (Agent Mode)")
 
-    current_year = datetime.now().year
-
-    # 1. 파라미터 추출
-    param_prompt = f"""
-    사용자의 예약 요청과 대화 컨텍스트에서 아래 정보를 최대한 추출하세요.
-    현재 연도는 {current_year}년입니다. 과거 날짜가 나오면 {current_year}년으로 보정하세요.
-    사용자의 의도가 항공권 예약이라면 반드시 "flight"를, 숙소 예약이라면 "hotel"을 반환하세요.
-
-    - booking_type: "hotel" 또는 "flight" (사용자 발화에 비행기, 항공권 관련 언급이 있다면 무조건 "flight")
-    - destination: 목적지 IATA 공항 코드 3자리 대문자 (예: NRT, OSA, CDG, BKK, SIN). 도시명이 오면 반드시 대표 공항 IATA 코드로 변환하세요.
-    - destination_kr: 목적지 한국어명 (예: 도쿄, 오사카, 파리)
-    - check_in: 호텔 체크인 날짜 (YYYY-MM-DD), 대화에서 언급된 날짜/박수를 토대로 추론
-    - check_out: 호텔 체크아웃 날짜 (YYYY-MM-DD)
-    - departure_date: 항공 출국일 (YYYY-MM-DD)
-    - return_date: 항공 귀국일 (YYYY-MM-DD, 편도면 null)
-    - guests: 인원 수 (int, 기본 2). "2명", "친구와 둘이", "혼자" 등에서 추론
-    - origin: 출발 공항 IATA 코드 (항공편, 기본 ICN)
-    - item_index: 대화에서 이미 특정 항목을 골랐다면 0-based index.
-      예: "첫 번째 호텔로 예약해줘" → 0, "두 번째 항공편으로 해줘" → 1.
-      아직 고르지 않았으면 null.
-
-    JSON만 출력:
-    {{"booking_type": "hotel", "destination": "Tokyo", "destination_kr": "도쿄",
-      "check_in": "2026-04-01", "check_out": "2026-04-04",
-      "departure_date": null, "return_date": null,
-      "guests": 2, "origin": "ICN", "item_index": null}}
-    """
+    param_prompt = build_booking_param_prompt()
     params = extract_params_with_openai(param_prompt, user_message, context)
     print(f"[DEBUG] booking params extracted: {params}")
 
-    booking_type   = params.get("booking_type", "hotel")
+    booking_type = params.get("booking_type", "hotel")
     
-    # [안전장치] LLM이 실수로 'hotel'을 뱉었더라도 사용자가 항공권을 원하면 'flight'로 강제 보정
     if booking_type == "hotel":
         if any(w in user_message for w in ["비행기", "항공", "편도", "왕복", "출국", "귀국"]):
             booking_type = "flight"
@@ -487,12 +350,12 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
     guests         = int(params.get("guests") or 2)
     session_id     = "default"
 
-    # item_index: null이면 아직 선택 안 한 것 → 선택 모달 표시
     raw_index      = params.get("item_index")
     already_chosen = raw_index is not None
     item_index     = int(raw_index) if already_chosen else 0
 
-    # 2. 실시간 검색
+    current_year = datetime.now().year
+
     if booking_type == "hotel":
         check_in  = params.get("check_in")  or f"{current_year}-04-01"
         check_out = params.get("check_out") or f"{current_year}-04-04"
@@ -542,10 +405,9 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
             "message": bot_message,
         }, ensure_ascii=False)
 
-    else:  # flight
+    else:
         origin   = params.get("origin", "ICN")
         dep_date = params.get("departure_date") or params.get("check_in") or f"{current_year}-04-01"
-        # ret_date가 null/빈문자열이면 None으로 통일 (편도)
         ret_date = params.get("return_date") or params.get("check_out") or None
 
         is_roundtrip_booking = bool(ret_date)
@@ -599,47 +461,37 @@ def _parse_flight_items_for_booking(
     items: List[Dict[str, Any]] = []
 
     def _extract_airline_from_line(line: str) -> str:
-        """바디 라인에서 [항공사명 (편명)] 또는 첫 단어를 추출"""
-        # Amadeus 포맷: [대한항공 (KE701)] 또는 [대한항공]
         bracket = re.search(r"\[([^\]]+)\]", line)
         if bracket:
             raw = bracket.group(1).strip()
-            # 편명 분리: "대한항공 (KE701)" → airline="대한항공", fn="KE701"
             fn_match = re.search(r"\(([A-Z0-9]{2,7})\)", raw)
             airline_name = re.sub(r"\s*\([A-Z0-9]{2,7}\)", "", raw).strip()
             return airline_name, fn_match.group(1) if fn_match else ""
-        # Google 포맷: 첫 단어가 항공사명
         parts = line.strip().lstrip("🛫🛬 ").split()
         if parts:
             return parts[0], ""
         return "", ""
 
     def _extract_times(line: str):
-        """라인에서 (출발시각, 도착시각) 추출. 구글/아마데우스 등 모든 날짜/시간 포맷 완벽 대응"""
-        # 시간(HH:MM) 앞뒤로 날짜(YYYY-MM-DD 등)가 붙어있을 수 있는 패턴을 전부 찾아냅니다.
         times = re.findall(r'(?:(?:\d{4}-)?\d{1,2}-\d{1,2}\s+)?\d{1,2}:\d{2}(?:\s*[APap][Mm])?', line)
         if len(times) >= 2:
             return times[0].strip(), times[1].strip()
         return "", ""
 
     if isinstance(raw_text, str):
-        # 각 항공편 블록은 "🎫" 로 시작
         blocks = [b.strip() for b in raw_text.split("\n\n") if "🎫" in b]
         for block in blocks[:10]:
             lines = block.splitlines()
             header = lines[0] if lines else ""
 
-            # 왕복 여부
             is_roundtrip = "(왕복)" in header
 
-            # 좌석 등급 (헤더에서)
             cabin = "일반석"
             for c in ["일등석", "비즈니스", "프리미엄 일반석", "일반석"]:
                 if c in block:
                     cabin = c
                     break
 
-            # 가는편/오는편 라인 분리
             out_line = ""
             ret_line = ""
             for line in lines[1:]:
@@ -648,40 +500,33 @@ def _parse_flight_items_for_booking(
                 elif "🛬" in line:
                     ret_line = line
 
-            # 항공사명, 편명 추출 (가는편 기준)
             target_line = out_line if out_line else (lines[1] if len(lines) > 1 else "")
             airline, flight_number = _extract_airline_from_line(target_line)
 
-            # 시각 추출
             dep_time, dep_arr_time = _extract_times(out_line)
             ret_dep_time, ret_arr_time = _extract_times(ret_line) if ret_line else ("", "")
 
-            # 소요시간 추출 (가는편 기준)
             duration = ""
             dur_match = re.search(r"(\d+시간\s*\d*분?|\d+분)", out_line or block)
             if dur_match:
                 duration = dur_match.group(1)
 
-            # [추가된 부분] 오는편 소요시간 추출
             ret_duration = ""
             if ret_line:
                 rdur_match = re.search(r"(\d+시간\s*\d*분?|\d+분)", ret_line)
                 if rdur_match:
                     ret_duration = rdur_match.group(1)
 
-            # 경유 여부 (가는편 기준)
             stops = "직항"
             if "경유" in (out_line or block):
                 stops_match = re.search(r"(\d+회 경유)", out_line or block)
                 stops = stops_match.group(1) if stops_match else "경유"
 
-            # 수하물
             baggage = ""
             bag_match = re.search(r"🧳([\d]+[개kg]+)", block)
             if bag_match:
                 baggage = bag_match.group(0)
 
-            # 가격
             price_str = ""
             price_match = re.search(r"💰\s*([\d,]+원|가격정보없음)", block)
             if price_match:
@@ -694,18 +539,14 @@ def _parse_flight_items_for_booking(
                 "destination": destination,
                 "destination_kr": destination_kr,
                 "is_roundtrip": is_roundtrip,
-                # 가는편
                 "dep_time": dep_time or dep_date,
                 "dep_arr_time": dep_arr_time or "",
-                # 오는편 (왕복 시)
                 "ret_dep_time": ret_dep_time,
                 "ret_arr_time": ret_arr_time,
-                # 날짜
                 "dep_date": dep_date,
                 "ret_date": ret_date or "",
-                # 기타
                 "duration": duration or "-",
-                "ret_duration": ret_duration or "-", # 오는편 소요시간
+                "ret_duration": ret_duration or "-",
                 "stops": stops,
                 "cabin": cabin,
                 "baggage": baggage,
@@ -714,7 +555,6 @@ def _parse_flight_items_for_booking(
             })
 
     if not items:
-        # fallback
         items.append({
             "airline": "검색된 항공편",
             "flight_number": "",
@@ -784,9 +624,8 @@ def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
     elif tool == "booking_action":
         return run_booking_action_tool(user_message, context)
     elif tool == "budget_planner":
-        return call_gemini("예산 전문가입니다.", f"컨텍스트: {context}\n질문: {user_message}")
+        return call_gemini(BUDGET_SYSTEM, f"컨텍스트: {context}\n질문: {user_message}")
     elif tool == "out_of_scope":
         return "여행과 관련된 질문을 해주시면 기쁘게 도와드릴 수 있습니다! 😊"
     else:
-        return call_gemini("친절한 여행 에이전트입니다.", f"{context}\nUser: {user_message}")
-    
+        return call_gemini(DEFAULT_AGENT_SYSTEM, f"{context}\nUser: {user_message}")
