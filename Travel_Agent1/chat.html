@@ -1,518 +1,140 @@
 <!DOCTYPE html>
 <html lang="ko">
-
 <head>
   <meta charset="UTF-8" />
-  <title>여행 에이전트 챗봇</title>
+  <title>InsighTravel</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>✈️</text></svg>">
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f5f5f7;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      height: 100vh;
-      color: #222;
+      background: #f5f5f7; margin: 0; padding: 0; display: flex; height: 100vh; color: #222;
     }
-
-    .container {
-      display: flex;
-      flex-direction: row;
-      width: 100%;
-      height: 100%;
+    .container { display: flex; flex-direction: row; width: 100%; height: 100%; }
+    
+    /* 사이드바 */
+    .sidebar {
+      width: 260px; background-color: #bedcfa; display: flex; flex-direction: column;
+      padding: 20px; border-right: 1px solid #bedcfa; flex-shrink: 0;
     }
-
-    .chat-panel {
-      flex: 2;
-      display: flex;
-      flex-direction: column;
-      border-right: 1px solid #ddd;
-      background: #ffffff;
+    .sidebar-header { font-size: 18px; font-weight: 800; color: #333; margin-bottom: 24px; }
+    .new-chat-btn {
+      background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;
+      padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px;
     }
+    .history-label { font-size: 11px; font-weight: 700; color: #555; margin-bottom: 12px; text-transform: uppercase; }
+    .chat-history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+    .history-item { padding: 10px 12px; border-radius: 8px; font-size: 14px; color: #4a5568; text-decoration: none; cursor: pointer; }
+    .history-item:hover { background-color: #edf2f7;}
+    .history-item.active { background-color: #ffffff; font-weight: 600; }
 
-    .chat-header {
-      padding: 12px 16px;
-      border-bottom: 1px solid #eee;
-      font-weight: 600;
-      font-size: 15px;
-      background: #fafafa;
-    }
+    /* 채팅 영역 */
+    .chat-panel { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
+    .chat-header { padding: 12px 16px; border-bottom: 1px solid #eee; font-weight: 600; font-size: 15px; background: #fafafa; }
+    .chat-log { flex: 1; padding: 16px; overflow-y: auto; background: #f7f8fa; }
 
-    .chat-log {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-      background: #f7f8fa;
-    }
+    /* 메시지 스타일 */
+    .message { margin-bottom: 12px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .message.user { align-self: flex-end; background: #80baf8; color: #fff; border-radius: 16px 16px 2px 16px; padding: 8px 12px; }
+    .message.assistant { align-self: flex-start; background: #ffffff; border-radius: 16px 16px 16px 2px; padding: 8px 12px; border: 1px solid #e1e1e1; }
 
-    .message {
-      margin-bottom: 12px;
-      max-width: 85%;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .message.user {
-      align-self: flex-end;
-      background: #007aff;
-      color: #fff;
-      border-radius: 16px 16px 2px 16px;
-      padding: 8px 12px;
-    }
-
-    .message.assistant {
-      align-self: flex-start;
-      background: #ffffff;
-      border-radius: 16px 16px 16px 2px;
-      padding: 8px 12px;
-      border: 1px solid #e1e1e1;
-    }
-
-    .input-panel {
-      padding: 10px;
-      border-top: 1px solid #eee;
-      background: #fafafa;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
+    /* 하단 입력바 */
+    .input-panel { padding: 15px; border-top: 1px solid #eee; background: #fafafa; }
+    .input-row { display: flex; align-items: stretch; gap: 10px; width: 100%; }
     #user-input {
-      width: 100%;
-      min-height: 60px;
-      max-height: 120px;
-      resize: vertical;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 14px;
-      box-sizing: border-box;
+      flex: 1; min-height: 44px; max-height: 80px; resize: none;
+      padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box;
     }
-
-    .input-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .hint {
-      font-size: 12px;
-      color: #666;
-    }
-
     .send-btn {
-      padding: 6px 14px;
-      border-radius: 999px;
-      border: none;
-      font-size: 13px;
-      cursor: pointer;
-      background: #007aff;
-      color: white;
-      white-space: nowrap;
+      height: 44px; padding: 0 20px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 600; cursor: pointer; background: #80baf8; color: white;
+      white-space: nowrap; flex-shrink: 0;
     }
+    .hint { font-size: 11px; color: #888; margin-top: 8px; }
 
-    .send-btn:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-
-    .debug-panel {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: #fdfdfd;
-    }
-
-    .debug-header {
-      padding: 10px 14px;
-      border-bottom: 1px solid #eee;
-      font-size: 14px;
-      font-weight: 600;
-      background: #fafafa;
-    }
-
-    .debug-body {
-      padding: 10px 14px;
-      font-size: 12px;
-      overflow-y: auto;
-    }
-
-    .debug-row {
-      margin-bottom: 8px;
-    }
-
-    .debug-label {
-      font-weight: 600;
-      margin-right: 4px;
-    }
-
-    pre {
-      background: #f4f4f4;
-      padding: 8px;
-      border-radius: 6px;
-      max-height: 200px;
-      overflow: auto;
-      font-size: 11px;
-      white-space: pre-wrap;
-      /* 자동 줄바꿈 */
-      word-break: break-all;
-      /* 단어 중간에서도 줄바꿈 */
-      overflow-wrap: break-word;
-    }
-
-    .stage-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      background: #e5f3ff;
-      color: #0060c9;
-    }
-
-    .route-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      background: #f5e9ff;
-      color: #6b21a8;
-    }
-
-    /* 에이전트 모드 미니브라우저 */
-    .agent-browser {
-      background: #fff;
-      border-radius: 12px;
-      overflow: hidden;
-      margin: 12px 0;
-      border: 1px solid #e0e0e0;
-      max-width: 95%;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-      animation: browserSlideIn 0.4s ease-out;
-    }
-
-    @keyframes browserSlideIn {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .agent-browser-bar {
-      background: #f5f5f5;
-      padding: 8px 12px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      color: #666;
-      border-bottom: 1px solid #e0e0e0;
-    }
-
-    .browser-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-    }
-
-    .dot-red {
-      background: #ff5f57;
-    }
-
-    .dot-yellow {
-      background: #ffbd2e;
-    }
-
-    .dot-green {
-      background: #28c840;
-    }
-
-    .browser-url {
-      flex: 1;
-      background: #fff;
-      border-radius: 4px;
-      padding: 4px 8px;
-      color: #1a73e8;
-      font-family: monospace;
-      font-size: 11px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border: 1px solid #ddd;
-    }
-
-    .agent-browser iframe {
-      width: 100%;
-      height: 560px;
-      border: none;
-      background: #fff;
-    }
-
-    .agent-status {
-      padding: 7px 12px;
-      background: #f0f7ff;
-      color: #1a73e8;
-      font-size: 12px;
-      text-align: center;
-      font-weight: 500;
-      border-bottom: 1px solid #e0e0e0;
-    }
-
-    /* 모달 공통 */
-    .modal-overlay,
-    .sel-modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.45);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .sel-modal-overlay {
-      z-index: 1001;
-      align-items: flex-start;
-      padding: 32px 12px;
-      overflow-y: auto;
-    }
-
-    .modal-overlay.active,
-    .sel-modal-overlay.active {
-      display: flex;
-    }
-
-    .modal-box,
-    .sel-modal-box {
-      background: #fff;
-      border-radius: 16px;
-      padding: 28px 28px 24px;
-      width: 420px;
-      max-width: 95vw;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
-      animation: modalIn 0.25s ease-out;
-    }
-
-    .sel-modal-box {
-      width: 520px;
-      padding: 24px 22px 20px;
-    }
-
+    /* 미니브라우저 및 모달 스타일  */
+    .agent-browser { background: #fff; border-radius: 12px; overflow: hidden; margin: 12px 0; border: 1px solid #e0e0e0; 
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    .agent-browser-bar { background: #f5f5f5; padding: 8px 12px; display: flex; gap: 6px; }
+    .browser-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-red { background: #ff5f57; } .dot-yellow { background: #ffbd2e; } .dot-green { background: #28c840; }
+    .agent-browser iframe { width: 100%; height: 560px; border: none; }
+    .agent-status { padding: 7px 12px; background: #f0f7ff; color: #1a73e8; font-size: 12px; text-align: center; }
+    .modal-overlay, .sel-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); 
+        z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.active, .sel-modal-overlay.active { display: flex; }
+    .modal-box, .sel-modal-box {background: #fff; border-radius: 16px; padding: 28px 28px 24px; width: 420px; max-width: 95vw;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18); animation: modalIn 0.25s ease-out;}
+    .sel-modal-box { width: 520px; padding: 24px 22px 20px;}
     @keyframes modalIn {
-      from {
-        opacity: 0;
-        transform: scale(0.93) translateY(12px);
+        from { opacity: 0; transform: scale(0.93) translateY(12px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
       }
-
-      to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-      }
-    }
-
-    .modal-title,
-    .sel-modal-title {
-      font-size: 17px;
-      font-weight: 700;
-      color: #111;
-      margin-bottom: 6px;
-    }
-
-    .modal-subtitle,
-    .sel-modal-subtitle {
-      font-size: 13px;
-      color: #666;
-      margin-bottom: 20px;
-    }
-
-    .modal-field-group {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
-    .modal-field-group .full {
-      grid-column: 1 / -1;
-    }
-
-    .modal-field {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 14px;
-      font-family: inherit;
-      color: #222;
-      box-sizing: border-box;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .modal-field:focus {
-      border-color: #007aff;
-      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
-    }
-
-    .modal-field::placeholder {
-      color: #d0d0d0;
-    }
-
-    .modal-section-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: #888;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin: 14px 0 8px;
-    }
-
-    .modal-actions,
-    .sel-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 18px;
-    }
-
-    .modal-cancel-btn,
-    .sel-cancel-btn {
-      flex: 1;
-      padding: 11px;
-      border-radius: 8px;
-      border: 1px solid #ddd;
-      background: #fff;
-      color: #444;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    .modal-confirm-btn,
-    .sel-confirm-btn {
-      flex: 2;
-      padding: 11px;
-      border-radius: 8px;
-      border: none;
-      background: #007aff;
-      color: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
+    .modal-title, .sel-modal-title { font-size: 17px; font-weight: 700; color: #111; margin-bottom: 6px;}
+    .modal-subtitle, .sel-modal-subtitle { font-size: 13px; color: #666; margin-bottom: 20px;}
+    .modal-field-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;} 
+    .modal-field-group .full { grid-column: 1 / -1; }
+    .modal-field { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+        font-size: 14px; outline: none; transition: border-color 0.2s;}
+    .modal-field:focus { border-color: #80baf8; }
+    .modal-section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase;
+        letter-spacing: 0.5px; margin: 14px 0 8px;}
+    .modal-actions, .sel-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .modal-cancel-btn, .sel-cancel-btn {
+        flex: 1; padding: 11px; border-radius: 8px; border: 1px solid #ddd;
+        background: #fff; color: #444; font-size: 14px; cursor: pointer;}
+    .modal-confirm-btn, .sel-confirm-btn {flex: 2; padding: 11px; border-radius: 8px; border: none;
+            background: #80baf8; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;}
+  
     /* 선택 카드 리스트 */
     .sel-card-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 380px;
-      overflow-y: auto;
-      margin-bottom: 16px;
-      padding-right: 2px;
-    }
+        display: flex; flex-direction: column; gap: 8px; max-height: 380px;
+        overflow-y: auto; margin-bottom: 16px; padding-right: 2px;
+      }
+  
+      .sel-card {
+        border: 2px solid #e8eaf0; border-radius: 12px; padding: 13px 15px;
+        cursor: pointer; transition: all .18s; background: #fff; position: relative;
+      }
+  
+      .sel-card:hover { border-color: #4693f8; }
+      .sel-card.sel-selected { border-color: #4693f8; background: #f0f6ff; }
+  
+      .sel-card.sel-selected::after {
+        content: '✓'; position: absolute; top: 10px; right: 12px;
+        background: #4693f8; color: #fff; width: 20px; height: 20px;
+        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 700;
+      }
+  
+      .sel-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+      .sel-card-name { font-size: 14px; font-weight: 700; color: #1a1a2e; flex: 1; padding-right: 24px; }
+      .sel-card-price { font-size: 15px; font-weight: 800; color: #f59e0b; }
+      .sel-card-meta { font-size: 12px; color: #777; display: flex; gap: 10px; flex-wrap: wrap; }
 
-    .sel-card {
-      border: 2px solid #e8eaf0;
-      border-radius: 12px;
-      padding: 13px 15px;
-      cursor: pointer;
-      transition: all .18s;
-      background: #fff;
-      position: relative;
-    }
-
-    .sel-card:hover {
-      border-color: #1a73e8;
-      box-shadow: 0 3px 12px rgba(26, 115, 232, .1);
-    }
-
-    .sel-card.sel-selected {
-      border-color: #1a73e8;
-      background: #f0f6ff;
-    }
-
-    .sel-card.sel-selected::after {
-      content: '✓';
-      position: absolute;
-      top: 10px;
-      right: 12px;
-      background: #1a73e8;
-      color: #fff;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .sel-card-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 6px;
-    }
-
-    .sel-card-name {
-      font-size: 14px;
-      font-weight: 700;
-      color: #1a1a2e;
-      flex: 1;
-      padding-right: 24px;
-      line-height: 1.3;
-    }
-
-    .sel-card-price {
-      font-size: 15px;
-      font-weight: 800;
-      color: #f59e0b;
-    }
-
-    .sel-card-meta {
-      font-size: 12px;
-      color: #777;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-  </style>
+    </style>
 </head>
 
 <body>
   <div class="container">
-    <!-- 채팅 영역 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">✈️InsighTravel</div>
+      <button class="new-chat-btn"><span>+</span> 새 여행 계획</button>
+      <div class="history-label">최근 여행 기록</div>
+      <nav class="chat-history-list">
+        <div class="history-item active">그리스 산토리니 7일 추천</div>
+        <div class="history-item">일본 오사카 3박 4일 일정</div>
+      </nav>
+    </aside>
+
     <div class="chat-panel">
       <div class="chat-header">✈️ 여행 에이전트</div>
       <div id="chat-log" class="chat-log"></div>
       <div class="input-panel">
-        <textarea id="user-input" placeholder="예시: 3월에 친구랑 3박 4일 오사카 여행 가고 싶은데 뭐부터 정해야 할까?"></textarea>
         <div class="input-row">
-          <div class="hint">엔터: 전송 · 쉬프트+엔터: 줄바꿈</div>
+          <textarea id="user-input" placeholder="궁금한 여행 일정을 입력하세요! &#10;예) 4월에 3박4일 도쿄 여행을 가려고 하는데 가볼만한 곳 추천해줘."></textarea>
           <button id="send-btn" class="send-btn" onclick="sendMessage()">보내기</button>
         </div>
-      </div>
-    </div>
-
-    <!-- 디버그/플랜 영역 -->
-    <div class="debug-panel">
-      <div class="debug-header">🔍 Planner / Tool 상태</div>
-      <div class="debug-body">
-        <div class="debug-row"><span class="debug-label">route:</span><span id="debug-route" class="route-pill">-</span>
-        </div>
-        <div class="debug-row"><span class="debug-label">trip_stage:</span><span id="debug-stage"
-            class="stage-pill">-</span></div>
-        <div class="debug-row"><span class="debug-label">plan:</span></div>
-        <pre id="plan-json">{}</pre>
-      </div>
     </div>
   </div>
 
@@ -575,7 +197,7 @@
   </div>
 
   <script>
-    // --- [NEW] 세션 ID 생성 (브라우저별 1개 유지) ---
+    // 세션 ID 생성 (브라우저별 1개 유지)
     let sessionId = localStorage.getItem("travel_session_id") || "sess-" + Math.random().toString(36).substring(2, 10);
     localStorage.setItem("travel_session_id", sessionId);
 
@@ -595,11 +217,10 @@
     }
 
     function setDebugInfo(route, plan) {
-      document.getElementById("debug-route").textContent = route || "-";
-      document.getElementById("debug-stage").textContent = (plan && plan.trip_stage) || "ideation";
-      document.getElementById("plan-json").textContent = JSON.stringify(plan || {}, null, 2);
+      console.log("Debug Info:", { route, plan });
     }
 
+    // 메시지 전송 함수
     async function sendMessage() {
       const input = document.getElementById("user-input");
       const sendBtn = document.getElementById("send-btn");
@@ -658,7 +279,6 @@
     function renderSelectionCards(items, isHotel) {
       const listEl = document.getElementById("sel-card-list");
       listEl.innerHTML = items.length ? "" : '<div style="padding:24px;text-align:center;">결과가 없습니다.</div>';
-
       items.forEach((item, i) => {
         const card = document.createElement("div");
         card.className = "sel-card" + (i === selectionSelectedIndex ? " sel-selected" : "");
@@ -690,10 +310,8 @@
       pendingBookingAction = action;
       const isHotel = action.booking_type === "hotel";
       const pf = action.prefill || {};
-
       document.getElementById("hotel-fields").style.display = isHotel ? "block" : "none";
       document.getElementById("flight-fields").style.display = isHotel ? "none" : "block";
-
       if (isHotel) {
         document.getElementById("m-checkin").value = pf.checkin || "";
         document.getElementById("m-checkout").value = pf.checkout || "";
@@ -744,7 +362,6 @@
     function showAgentBrowser(action, userInfo) {
       const urlPath = action.booking_type === "hotel" ? "hotel" : "flight";
       const realUrl = `/booking/${urlPath}?session_id=${action.session_id}&item_index=${action.item_index}&autobook=true&user_info=${encodeURIComponent(JSON.stringify(userInfo))}`;
-
       const wrapper = document.createElement("div");
       wrapper.className = "agent-browser";
       wrapper.innerHTML = `
@@ -762,8 +379,6 @@
 
     document.getElementById("user-input").addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });
-  </script>
+    });</script>
 </body>
-
 </html>
