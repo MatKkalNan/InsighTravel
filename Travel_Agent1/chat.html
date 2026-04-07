@@ -35,8 +35,43 @@
 
     /* 메시지 스타일 */
     .message { margin-bottom: 12px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-    .message.user { align-self: flex-end; background: #e5effa; color: #fff; border-radius: 16px 16px 2px 16px; padding: 8px 12px; }
-    .message.assistant { align-self: flex-start; background: #e9efff; border-radius: 16px 16px 16px 2px; padding: 8px 12px; border: 1px solid #e1e1e1; }
+    .message.user { align-self: flex-end; background: #67adf9; color: #fff; border-radius: 16px 16px 2px 16px; padding: 8px 12px; }
+    .message.assistant { align-self: flex-start; background: #e5effa; border-radius: 16px 16px 16px 2px; padding: 8px 12px; border: 1px solid #e1e1e1; }
+    
+    /* 메시지 행 레이아웃 */
+    .message-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px;}
+    .message-row.assistant { flex-direction: row;}
+
+    .message-row.user { flex-direction: row-reverse; justify-content: flex-end;}
+
+    /* 프로필 이미지 */
+    .profile-avatar { width: 60px;height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0;}
+
+    /* 메시지 콘텐츠 */
+    .message-content { display: flex; flex-direction: column; gap: 4px; flex: 1;}
+
+    .profile-name {
+      font-size: 12px; font-weight: 600; color: #666;}
+
+    /* 점 애니메이션 */
+    .loading .dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background-color: #999; margin: 0 4px; animation: dotAnimation 1.4s infinite;
+    }
+    
+    .loading .dot:nth-child(1) { animation-delay: 0s;}
+    .loading .dot:nth-child(2) { animation-delay: 0.2s;}  
+    .loading .dot:nth-child(3) { animation-delay: 0.4s;}
+    
+    @keyframes dotAnimation { 0%, 60%, 100% {
+        opacity: 0.3;
+        transform: translateY(0);
+      }
+      30% {
+        opacity: 1;
+        transform: translateY(-10px);
+      }
+    }
 
     /* 하단 입력바 */
     .input-panel { padding: 15px; border-top: 1px solid #eee; background: #fafafa; }
@@ -214,7 +249,8 @@
       }, 400);
     });
  
-    const DOG_AVATAR = "profile.jpg";
+    const DOG_AVATAR = "/static/profile.jpg";
+    let loadingMessageId = null;
 
     function addMessage(role, text) {
       const chatLog = document.getElementById("chat-log");
@@ -258,6 +294,49 @@
       chatLog.appendChild(row);
       chatLog.scrollTop = chatLog.scrollHeight;
     }
+
+    // 로딩 메시지 표시 (점 애니메이션)
+  function showLoadingMessage() {
+  const chatLog = document.getElementById("chat-log");
+  const row = document.createElement("div");
+  row.classList.add("message-row", "assistant");
+  row.id = "loading-message";
+
+  const avatar = document.createElement("img");
+  avatar.src = DOG_AVATAR;
+  avatar.className = "profile-avatar";
+  avatar.style.width = "60px";
+  avatar.style.height = "60px";
+  row.appendChild(avatar);
+
+  const contentWrap = document.createElement("div");
+  contentWrap.className = "message-content";
+
+  const name = document.createElement("div");
+  name.className = "profile-name";
+  name.textContent = "";
+
+  const bubble = document.createElement("div");
+  bubble.classList.add("message", "assistant");
+  bubble.id = "loading-bubble";
+  bubble.className = "message assistant loading";
+  bubble.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+
+  contentWrap.appendChild(name);
+  contentWrap.appendChild(bubble);
+  row.appendChild(contentWrap);
+
+  chatLog.appendChild(row);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+  // 로딩 메시지 제거
+  function hideLoadingMessage() {
+    const loadingMessage = document.getElementById("loading-message");
+    if (loadingMessage) {
+      loadingMessage.remove();
+    }
+  }
  
     function setDebugInfo(route, plan) {
       console.log("Debug Info:", { route, plan });
@@ -277,6 +356,8 @@
       input.value = "";
       sendBtn.disabled = true;
 
+      showLoadingMessage(); // 로딩 메시지 표시
+
       try {
         const res = await fetch("/chat", {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -284,6 +365,9 @@
         });
 
         const data = await res.json();
+
+        hideLoadingMessage(); // 로딩 메시지 제거
+
         let bookingAction = null;
         try { bookingAction = JSON.parse(data.reply); } catch (e) { }
 
