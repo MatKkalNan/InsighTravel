@@ -5,8 +5,14 @@
   <title>InsighTravel</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>✈️</text></svg>">
   <style>
+    @font-face {
+      font-family: 'MainFont';
+      src: url('/static/concon.ttf') format('truetype'); 
+      font-weight: normal;
+      font-style: normal;
+  }
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: 'MainFont', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f5f5f7; margin: 0; padding: 0; display: flex; height: 100vh; color: #222;
     }
     .container { display: flex; flex-direction: row; width: 100%; height: 100%; }
