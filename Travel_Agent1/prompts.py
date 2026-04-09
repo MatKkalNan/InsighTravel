@@ -49,22 +49,49 @@ def build_itinerary_user_prompt(user_message: str, places_info: str, weather_inf
 
 # 1-3. 항공권 검색
 def build_flight_param_prompt() -> str:
-    current_year = datetime.now().year
-    return f"""
-    항공권 파라미터를 추출하세요. 현재 연도는 {current_year}년입니다.
-    1. origin, destination은 반드시 IATA 공항 코드(3자리 대문자, 예: ICN, PVG, NRT)로 변환하세요.
-    2. departureDate, returnDate는 반드시 YYYY-MM-DD 형식이어야 합니다.
-    3. 사용자가 "3월"이라고만 하면 {current_year}-03-15 정도로 추측하세요.
-    JSON 형식: {{"origin": "ICN", "destination": "PVG", "departureDate": "YYYY-MM-DD", "return_date": "YYYY-MM-DD" or null}}
+    return """
+    항공권 검색 파라미터를 추출하세요.
+
+    중요:
+    1. 날짜를 YYYY-MM-DD로 계산하지 마세요.
+    2. 날짜 표현은 사용자의 원문을 최대한 그대로 추출하세요.
+    3. "오늘", "내일", "다음주 금요일", "3박 4일", "4월 초", "주말" 같은 표현을 수정하지 마세요.
+    4. origin, destination은 가능하면 IATA 코드로 변환하세요.
+    5. 불명확하면 null로 두세요.
+
+    JSON 형식:
+    {
+      "origin": "ICN",
+      "destination": "NRT",
+      "departure_date_text": "다음주 금요일",
+      "return_date_text": "다음주 월요일",
+      "duration_text": "3박 4일"
+    }
     """
 
 # 1-4. 숙소 검색
 STAY_PARAM_PROMPT = """
-추출: destination, check_in(YYYY-MM-DD), check_out, guests(int).
-JSON: {"destination": "Seoul", "check_in": "2026-05-01", "check_out": "2026-05-05", "guests": 2}
-"""
+숙소 검색용 파라미터를 추출하세요.
 
-STAY_SYSTEM = "전문 호텔 컨시어지로서, 검색된 목록을 비교하여 최적의 숙소를 추천하세요. 만약 데이터가 없다면 해당 지역의 숙소 예약 전략을 안내하세요."
+중요:
+- 날짜를 YYYY-MM-DD로 계산하지 마세요.
+- 날짜 관련 값은 사용자의 원문 표현을 최대한 그대로 추출하세요.
+- 사용자가 체크아웃 날짜를 직접 말하지 않았다면 check_out_text는 null로 두세요.
+- 기간 표현(예: "2박 3일", "3일간", "주말 동안")은 duration_text에만 넣으세요.
+- destination은 사용자의 지명 표현을 우선 유지하고, 임의로 번역하지 마세요.
+- guests는 가능하면 정수로 추출하세요. 알 수 없으면 null로 두세요.
+- 추측해서 값을 만들지 마세요.
+- 설명 없이 JSON만 출력하세요. 코드블록 마크다운은 사용하지 마세요.
+
+JSON:
+{
+  "destination": "도쿄",
+  "check_in_text": "내일",
+  "check_out_text": null,
+  "duration_text": "2박 3일",
+  "guests": 2
+}
+"""
 
 def build_stay_user_prompt(user_message: str, raw_text: str) -> str:
     return f"사용자 요청: {user_message}\n\n[통합 숙소 데이터]\n{raw_text}"
