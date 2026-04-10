@@ -8,6 +8,13 @@ from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from date_parser import (
+    resolve_date_expression,
+    infer_checkout_or_return,
+    sanitize_date_range,
+    to_iso,
+)
+
 # [✨ 핵심: prompts.py에서 모든 프롬프트 가져오기]
 from prompts import *
 
@@ -109,19 +116,32 @@ def run_itinerary_planner_tool(user_message: str, context: str, weather_data=Non
 # -------------------------------------------------------------------
 def run_flight_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Flight Search")
-    
+
     param_prompt = build_flight_param_prompt()
     params = extract_params_with_openai(param_prompt, user_message, context)
-    
+
     origin = params.get("origin", "ICN")
     dest = params.get("destination")
-    dep_date = params.get("departureDate")
-    ret_date = params.get("return_date")
+
+    departure_text = params.get("departure_date_text", "")
+    return_text = params.get("return_date_text", "")
+    duration_text = params.get("duration_text", "")
+
+    dep_date_obj = resolve_date_expression(departure_text)
+    ret_date_obj = resolve_date_expression(return_text, base_date=dep_date_obj) if return_text else None
+
+    if not ret_date_obj and duration_text:
+        ret_date_obj = infer_checkout_or_return(dep_date_obj, duration_text)
+
+    dep_date_obj, ret_date_obj = sanitize_date_range(dep_date_obj, ret_date_obj)
+
+    dep_date = to_iso(dep_date_obj)
+    ret_date = to_iso(ret_date_obj)
 
     if not dest or not dep_date:
-        return "출발지, 목적지 또는 날짜 정보가 부족하여 항공권을 검색할 수 없습니다. (예: 3월 상하이 항공권 알려줘)"
+        return "출발지, 목적지 또는 날짜 정보가 부족하여 항공권을 검색할 수 없습니다. 예: 다음주 금요일 도쿄 항공권 알려줘"
 
-    print(f"✈️ API 호출 파라미터: {origin} -> {dest}, 날짜: {dep_date}")
+    print(f"✈️ API 호출 파라미터: {origin} -> {dest}, 날짜: {dep_date}, 귀국: {ret_date}")
 
     try:
         flight_data = search_flight_offers(origin, dest, dep_date, ret_date)
@@ -136,44 +156,93 @@ def run_flight_search_tool(user_message: str, context: str) -> str:
 # -------------------------------------------------------------------
 def run_stay_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Stay Search")
-    
+
     params = extract_params_with_openai(STAY_PARAM_PROMPT, user_message, context)
     print("[DEBUG] extract_search_params 결과:", params)
-    
+
     destination = params.get("destination")
-    check_in = params.get("check_in")
-    check_out = params.get("check_out")
-    guests = params.get("guests", 2)
-    
+
+    raw_guests = params.get("guests", 2)
+    if isinstance(raw_guests, str):
+        raw_guests = raw_guests.strip()
+        if raw_guests in ["혼자", "1명", "한 명", "1"]:
+            guests = 1
+        elif raw_guests in ["둘", "2명", "두 명", "2", "미정"]:
+            guests = 2
+        else:
+            try:
+                guests = int(re.sub(r"[^\d]", "", raw_guests))
+            except Exception:
+                guests = 2
+    else:
+        try:
+            guests = int(raw_guests)
+        except (TypeError, ValueError):
+            guests = 2
+
+    check_in_text = params.get("check_in_text", "")
+    check_out_text = params.get("check_out_text", "")
+    duration_text = params.get("duration_text", "")
+
+    check_in_obj = resolve_date_expression(check_in_text)
+    check_out_obj = resolve_date_expression(check_out_text, base_date=check_in_obj) if check_out_text else None
+
+    if not check_out_obj and duration_text:
+        check_out_obj = infer_checkout_or_return(check_in_obj, duration_text)
+
+    check_in_obj, check_out_obj = sanitize_date_range(check_in_obj, check_out_obj)
+
+    check_in = to_iso(check_in_obj)
+    check_out = to_iso(check_out_obj)
+
+    print("[DEBUG] normalized stay params:", {
+        "destination": destination,
+        "check_in_text": check_in_text,
+        "check_out_text": check_out_text,
+        "duration_text": duration_text,
+        "check_in": check_in,
+        "check_out": check_out,
+        "guests": guests,
+    })
+
     if not destination:
         return "어느 지역의 숙소를 찾아드릴까요? 도시 이름을 말씀해 주세요."
+
+    if not check_in:
+        return "체크인 날짜 정보가 부족해요. 예: 내일부터 2박 3일 도쿄 숙소 찾아줘"
 
     all_accommodations = []
 
     try:
         ta_results = search_tripadvisor(destination, check_in, check_out)
         if ta_results:
-            for item in ta_results: item['source'] = 'TripAdvisor'
+            for item in ta_results:
+                item["source"] = "TripAdvisor"
             all_accommodations.extend(ta_results)
-    except Exception as e: print(f"TripAdvisor Error: {e}")
+    except Exception as e:
+        print(f"TripAdvisor Error: {e}")
 
     try:
         bk_results = search_booking(destination, check_in, check_out, guests)
         if bk_results:
-            for item in bk_results: item['source'] = 'Booking.com'
+            for item in bk_results:
+                item["source"] = "Booking.com"
             all_accommodations.extend(bk_results)
-    except Exception as e: print(f"Booking.com Error: {e}")
+    except Exception as e:
+        print(f"Booking.com Error: {e}")
 
     try:
         am_results = search_amadeus(destination, check_in, check_out, guests)
         if am_results:
-            for item in am_results: item['source'] = 'Amadeus'
+            for item in am_results:
+                item["source"] = "Amadeus"
             all_accommodations.extend(am_results)
-    except Exception as e: print(f"Amadeus Error: {e}")
+    except Exception as e:
+        print(f"Amadeus Error: {e}")
 
     if all_accommodations:
         raw_text = "\n".join([
-            f"- [{h.get('source')}] {h.get('name')}: {h.get('price')} (평점: {h.get('rating')})" 
+            f"- [{h.get('source')}] {h.get('name')}: {h.get('price')} (평점: {h.get('rating')})"
             for h in all_accommodations[:10]
         ])
     else:
@@ -583,7 +652,12 @@ def _parse_flight_items_for_booking(
 # -------------------------------------------------------------------
 # 메인 라우터
 # -------------------------------------------------------------------
-def run_tools_from_plan(plan: Dict[str, Any], context: str) -> str:
+def run_tools_from_plan(
+    plan: Dict[str, Any],
+    context: str,
+    weather_date: Optional[dict] = None,
+    long_term_memory: Optional[Dict[str, Any]] = None,
+) -> str:
     plan = plan or {}
     tool = plan.get("tools", ["general_chat"])[0]
     user_message = plan.get("original_user_message", "")

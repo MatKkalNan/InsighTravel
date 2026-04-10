@@ -6,63 +6,65 @@ class ChatMessage(TypedDict):
     role: Literal["user", "assistant"]
     content: str
 
-class TripProfile(TypedDict, total = False):
-    destination: str # ex) "Tokyo"
-    start_date: str # ex) "2026-03-02"
-    end_date: str # ex) "2026-03-05"
-    nights: int # ex) "3"
-    days: int # ex) 4
-    travelers: int # ex) "2"(people)
-    departure_city: str # ex) "Seoul"
 
-class Constraints(TypedDict, total = False):
-    hard: Dict[str, Any] # hard_constraint
-    # ex) budget_upper, date
-    soft: Dict[str, Any] # soft_constraint
-    # user_prefer ex) 가성비/luxury...
+class TripGoal(TypedDict, total=False):
+    destination: str
+    nights: int
+    days: int
+    month: str
+    budget_krw: int
+    style_tags: List[str]
+    status: str
 
-class ToolResult(TypedDict, total = False):
+
+class TripProfile(TypedDict, total=False):
+    destination: str   # ex) "Tokyo"
+    start_date: str    # ex) "2026-03-02"
+    end_date: str      # ex) "2026-03-05"
+    nights: int        # ex) 3
+    days: int          # ex) 4
+    travelers: int     # ex) 2
+    departure_city: str  # ex) "Seoul"
+
+
+class Constraints(TypedDict, total=False):
+    hard: Dict[str, Any]
+    soft: Dict[str, Any]
+
+
+class ToolResult(TypedDict, total=False):
     status: Literal["ok", "no_result", "error"]
     data: Any
-    evidence: Optional[Dict[str, Any]] # reference/search_option/link
-    retry_hint: Optional[str] # hint for retry (relax conditions...)
-
-class ReplanState(TypedDict, total = False):
-    count: int # replan count
-    reason: Optional[str] # reason for replan
-    last_adjustment: Optional[Dict[str, Any]] # change what & how
+    evidence: Optional[Dict[str, Any]]
+    retry_hint: Optional[str]
 
 
-class ChatState(TypedDict):
+class ReplanState(TypedDict, total=False):
+    count: int
+    reason: Optional[str]
+    last_adjustment: Optional[Dict[str, Any]]
+
+
+class ChatState(TypedDict, total=False):
     """
-    여행 에이전트용 LangGraph 상태 정의.
-
-    - messages: 지금까지의 대화 로그
-    - context: 플래너/툴에 넘길 요약 컨텍스트 (최근 대화 요약 등)
-    - trip_goal: 사용자가 준비 중인 '여행 장기 목표' 요약
-      예: "3월에 친구랑 3박 4일 오사카, 예산 80만 원 정도"
-    - plan: planner.plan_tasks() 결과(JSON)
-    - tool_output: tools.run_tools_from_plan() 결과(최종 답변 텍스트)
-
-    (+추가 2026-03-02)
-    Agentic AI로의 발전을 위한 state 수정
-    - trip_profile: 유저 여행 계획 세부 기억
-    - constraints: 조건 누적 + 부정 조건 처리
-    - tool_results + replan: "시도/결과/재계획" 기록 -> 루프/리플래닝 기능
-    
-    [근거 있는 판단 가능]
-    아직은 chat_state만 수정, 후에 다른 코드 수정을 통해 발전 가능
-    (2026/03/02 수정 후 테스트 완료 : 오류 x)
+    여행 에이전트용 LangGraph 상태 정의
     """
-    
+
+    user_id: Optional[int]
+    session_id: Optional[str]
+
     messages: List[ChatMessage]
     context: str
-    trip_goal: Optional[str] # trip_goal: Optional[Dict[str, Any]]
-    plan: Optional[Dict[str, Any]]
-    tool_output: Optional[str]
+    short_memory_summary: Optional[str]
+    long_term_memory: Optional[Dict[str, Any]]
+
+    trip_goal: Optional[TripGoal]
     trip_profile: Optional[TripProfile]
     constraints: Optional[Constraints]
+
+    plan: Optional[Dict[str, Any]]
+    tool_output: Optional[str]
     tool_results: Optional[Dict[str, ToolResult]]
     replan: Optional[ReplanState]
-    weather_data: Optional[Dict[str, Any]] 
 
+    weather_data: Optional[Dict[str, Any]]
