@@ -8,12 +8,66 @@ from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from date_parser import (
-    resolve_date_expression,
-    infer_checkout_or_return,
-    sanitize_date_range,
-    to_iso,
-)
+from datetime import datetime, date
+
+def _today() -> date:
+    return datetime.now().date()
+
+def _parse_yyyy_mm_dd(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+def _to_iso(d: Optional[date]) -> Optional[str]:
+    return d.isoformat() if d else None
+
+def _normalize_guests(value: Any, default: int = 2) -> int:
+    if value is None:
+        return default
+
+    if isinstance(value, int):
+        return max(1, value)
+
+    raw = str(value).strip()
+    if raw in ["혼자", "1명", "한 명", "1"]:
+        return 1
+    if raw in ["둘", "2명", "두 명", "2", "미정", ""]:
+        return 2
+
+    digits = re.sub(r"[^\d]", "", raw)
+    if digits:
+        try:
+            return max(1, int(digits))
+        except Exception:
+            return default
+
+    return default
+
+def _validate_future_date(d: Optional[date]) -> bool:
+    return d is not None and d >= _today()
+
+def _validate_date_range(start_date: Optional[date], end_date: Optional[date]) -> bool:
+    if start_date is None or end_date is None:
+        return False
+    if start_date < _today():
+        return False
+    if end_date <= start_date:
+        return False
+    return True
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None or value == "":
+            return default
+        return int(value)
+    except Exception:
+        return default
 
 # [✨ 핵심: prompts.py에서 모든 프롬프트 가져오기]
 from prompts import *
@@ -119,27 +173,31 @@ def run_flight_search_tool(user_message: str, context: str) -> str:
 
     param_prompt = build_flight_param_prompt()
     params = extract_params_with_openai(param_prompt, user_message, context)
+    print("[DEBUG] flight params extracted:", params)
 
-    origin = params.get("origin", "ICN")
-    dest = params.get("destination")
+    origin = (params.get("origin") or "ICN").strip()
+    dest = (params.get("destination") or "").strip()
 
-    departure_text = params.get("departure_date_text", "")
-    return_text = params.get("return_date_text", "")
-    duration_text = params.get("duration_text", "")
+    dep_date_str = (params.get("departureDate") or "").strip()
+    ret_date_str = (params.get("return_date") or "").strip()
 
-    dep_date_obj = resolve_date_expression(departure_text)
-    ret_date_obj = resolve_date_expression(return_text, base_date=dep_date_obj) if return_text else None
+    dep_date_obj = _parse_yyyy_mm_dd(dep_date_str)
+    ret_date_obj = _parse_yyyy_mm_dd(ret_date_str) if ret_date_str else None
 
-    if not ret_date_obj and duration_text:
-        ret_date_obj = infer_checkout_or_return(dep_date_obj, duration_text)
+    if not dest:
+        return "목적지 정보가 부족해서 항공권을 검색할 수 없어요. 예: 다음주 오사카 항공권 알려줘"
 
-    dep_date_obj, ret_date_obj = sanitize_date_range(dep_date_obj, ret_date_obj)
+    if not _validate_future_date(dep_date_obj):
+        return "출국 날짜를 다시 알려주세요. YYYY-MM-DD 형식의 미래 날짜가 필요해요."
 
-    dep_date = to_iso(dep_date_obj)
-    ret_date = to_iso(ret_date_obj)
+    if ret_date_str and ret_date_obj is None:
+        return "귀국 날짜 형식이 올바르지 않아요. YYYY-MM-DD 형식으로 다시 알려주세요."
 
-    if not dest or not dep_date:
-        return "출발지, 목적지 또는 날짜 정보가 부족하여 항공권을 검색할 수 없습니다. 예: 다음주 금요일 도쿄 항공권 알려줘"
+    if ret_date_obj and ret_date_obj <= dep_date_obj:
+        return "귀국 날짜는 출국 날짜보다 뒤여야 해요."
+
+    dep_date = _to_iso(dep_date_obj)
+    ret_date = _to_iso(ret_date_obj)
 
     print(f"✈️ API 호출 파라미터: {origin} -> {dest}, 날짜: {dep_date}, 귀국: {ret_date}")
 
@@ -158,58 +216,37 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     print("RUNNING: Stay Search")
 
     params = extract_params_with_openai(STAY_PARAM_PROMPT, user_message, context)
-    print("[DEBUG] extract_search_params 결과:", params)
+    print("[DEBUG] stay params extracted:", params)
 
-    destination = params.get("destination")
+    destination = (params.get("destination") or "").strip()
+    guests = _normalize_guests(params.get("guests"), default=2)
 
-    raw_guests = params.get("guests", 2)
-    if isinstance(raw_guests, str):
-        raw_guests = raw_guests.strip()
-        if raw_guests in ["혼자", "1명", "한 명", "1"]:
-            guests = 1
-        elif raw_guests in ["둘", "2명", "두 명", "2", "미정"]:
-            guests = 2
-        else:
-            try:
-                guests = int(re.sub(r"[^\d]", "", raw_guests))
-            except Exception:
-                guests = 2
-    else:
-        try:
-            guests = int(raw_guests)
-        except (TypeError, ValueError):
-            guests = 2
+    check_in_str = (params.get("check_in") or "").strip()
+    check_out_str = (params.get("check_out") or "").strip()
 
-    check_in_text = params.get("check_in_text", "")
-    check_out_text = params.get("check_out_text", "")
-    duration_text = params.get("duration_text", "")
-
-    check_in_obj = resolve_date_expression(check_in_text)
-    check_out_obj = resolve_date_expression(check_out_text, base_date=check_in_obj) if check_out_text else None
-
-    if not check_out_obj and duration_text:
-        check_out_obj = infer_checkout_or_return(check_in_obj, duration_text)
-
-    check_in_obj, check_out_obj = sanitize_date_range(check_in_obj, check_out_obj)
-
-    check_in = to_iso(check_in_obj)
-    check_out = to_iso(check_out_obj)
+    check_in_obj = _parse_yyyy_mm_dd(check_in_str)
+    check_out_obj = _parse_yyyy_mm_dd(check_out_str)
 
     print("[DEBUG] normalized stay params:", {
         "destination": destination,
-        "check_in_text": check_in_text,
-        "check_out_text": check_out_text,
-        "duration_text": duration_text,
-        "check_in": check_in,
-        "check_out": check_out,
+        "check_in": check_in_str,
+        "check_out": check_out_str,
+        "check_in_valid": _validate_future_date(check_in_obj),
+        "check_out_valid": check_out_obj is not None,
         "guests": guests,
     })
 
     if not destination:
         return "어느 지역의 숙소를 찾아드릴까요? 도시 이름을 말씀해 주세요."
 
-    if not check_in:
-        return "체크인 날짜 정보가 부족해요. 예: 내일부터 2박 3일 도쿄 숙소 찾아줘"
+    if not _validate_future_date(check_in_obj):
+        return "체크인 날짜를 다시 알려주세요. 미래 날짜가 필요해요."
+
+    if not _validate_date_range(check_in_obj, check_out_obj):
+        return "체크아웃 날짜를 다시 알려주세요. 체크아웃은 체크인보다 뒤여야 해요."
+
+    check_in = _to_iso(check_in_obj)
+    check_out = _to_iso(check_out_obj)
 
     all_accommodations = []
 
@@ -248,8 +285,8 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     else:
         raw_text = "현재 실시간 검색 결과가 없습니다. 일반적인 숙소 예약 팁을 알려주세요."
 
-    user_msg = build_stay_user_prompt(user_message, raw_text)
-    return call_gemini(STAY_SYSTEM, user_msg)
+    user_prompt = build_stay_user_prompt(user_message, raw_text)
+    return call_gemini(STAY_SYSTEM, user_prompt)
 
 
 # -------------------------------------------------------------------
@@ -281,12 +318,13 @@ def run_event_search_tool(user_message: str, context: str) -> str:
     
     param_prompt = build_event_param_prompt(context)
     params = extract_params_with_openai(param_prompt, user_message, context)
+    print("[DEBUG] event params extracted:", params)
     
     country = params.get("country", "한국")
     region = params.get("region", "")
     query = params.get("query", "축제")
-    start_date = params.get("start_date_text", "")
-    
+    start_date = params.get("start_date", "")
+
     events = []
     source_name = ""
 
@@ -296,28 +334,25 @@ def run_event_search_tool(user_message: str, context: str) -> str:
     else:
         events = search_events_serpapi(query)
         source_name = "구글 이벤트(SerpAPI)"
-    
+
     if events:
-        data_text = f"🔎 [{source_name} 검색 결과]\n"
+        data_text = f"[{source_name} 검색 결과]\n"
         for idx, ev in enumerate(events[:10], 1):
-            title = ev.get('title', '제목 없음')
-            date = ev.get('date', '날짜 정보 없음')
-            address = ev.get('address', '위치 정보 없음')
-            description = ev.get('description', '')
-            link = ev.get('link', '')
-            etype = ev.get('type', '이벤트')
+            title = ev.get("title", "제목 없음")
+            date_text = ev.get("date", "날짜 정보 없음")
+            address = ev.get("address", "위치 정보 없음")
+            description = ev.get("description", "")
+            link = ev.get("link", "")
+            etype = ev.get("type", "이벤트")
 
             data_text += f"{idx}. [{etype}] {title}\n"
-            data_text += f"   📅 일정: {date}\n"
-            data_text += f"   📍 위치: {address}\n"
-            
+            data_text += f"일정: {date_text}\n"
+            data_text += f"위치: {address}\n"
             if description and description != "설명 없음":
-                data_text += f"   💬 {description}\n"
-            
+                data_text += f"설명: {description}\n"
             if link:
-                data_text += f"   🔗 링크: {link}\n"
-                
-            data_text += "-" * 30 + "\n"
+                data_text += f"링크: {link}\n"
+            data_text += "------------------------------\n"
     else:
         data_text = f"현재 {region if region else country} 지역의 검색된 정보가 없습니다."
 
@@ -408,43 +443,10 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
     params = extract_params_with_openai(param_prompt, user_message, context)
     print(f"[DEBUG] booking params extracted: {params}")
 
-    def _safe_int(value, default=0):
-        try:
-            if value is None or value == "":
-                return default
-            return int(value)
-        except Exception:
-            return default
-
-    def _normalize_guests(value, default=2):
-        if value is None:
-            return default
-
-        if isinstance(value, int):
-            return max(1, value)
-
-        if isinstance(value, str):
-            raw = value.strip()
-            if raw in ["혼자", "1명", "한 명", "1"]:
-                return 1
-            if raw in ["둘", "2명", "두 명", "2"]:
-                return 2
-
-            digits = re.sub(r"[^\d]", "", raw)
-            if digits:
-                try:
-                    return max(1, int(digits))
-                except Exception:
-                    pass
-
-        return default
-
     booking_type = params.get("booking_type", "hotel")
 
-    # LLM이 booking_type을 잘못 잡았을 때 보정
-    if booking_type == "hotel":
-        if any(w in user_message for w in ["비행기", "항공", "항공권", "편도", "왕복", "출국", "귀국"]):
-            booking_type = "flight"
+    if booking_type == "hotel" and any(w in user_message for w in ["비행기", "항공", "항공권", "편도", "왕복", "출국", "귀국"]):
+        booking_type = "flight"
 
     destination = (params.get("destination") or "").strip()
     destination_kr = (params.get("destination_kr") or destination).strip()
@@ -455,36 +457,18 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
     already_chosen = raw_index is not None
     item_index = _safe_int(raw_index, default=0)
 
-    # ------------------------------------------------------------------
-    # 호텔 예약
-    # ------------------------------------------------------------------
     if booking_type == "hotel":
-        check_in_text = (params.get("check_in_text") or "").strip()
-        check_out_text = (params.get("check_out_text") or "").strip()
-        duration_text = (params.get("duration_text") or "").strip()
+        check_in_str = (params.get("check_in") or "").strip()
+        check_out_str = (params.get("check_out") or "").strip()
 
-        check_in_obj = resolve_date_expression(check_in_text)
-        check_out_obj = (
-            resolve_date_expression(check_out_text, base_date=check_in_obj)
-            if check_out_text else None
-        )
-
-        if not check_out_obj and duration_text:
-            check_out_obj = infer_checkout_or_return(check_in_obj, duration_text)
-
-        check_in_obj, check_out_obj = sanitize_date_range(check_in_obj, check_out_obj)
-
-        check_in = to_iso(check_in_obj)
-        check_out = to_iso(check_out_obj)
+        check_in_obj = _parse_yyyy_mm_dd(check_in_str)
+        check_out_obj = _parse_yyyy_mm_dd(check_out_str)
 
         print("[DEBUG] normalized hotel booking params:", {
             "destination": destination,
             "destination_kr": destination_kr,
-            "check_in_text": check_in_text,
-            "check_out_text": check_out_text,
-            "duration_text": duration_text,
-            "check_in": check_in,
-            "check_out": check_out,
+            "check_in": check_in_str,
+            "check_out": check_out_str,
             "guests": guests,
             "already_chosen": already_chosen,
             "item_index": item_index,
@@ -493,16 +477,18 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
         if not destination:
             return "어느 지역 숙소를 예약할까요? 예: 오사카 호텔 예약해줘"
 
-        if not check_in:
-            return "체크인 날짜가 필요해요. 예: 다음주 금요일부터 오사카 호텔 예약해줘"
+        if not _validate_future_date(check_in_obj):
+            return "체크인 날짜를 다시 알려주세요. 미래 날짜가 필요해요."
 
-        if not check_out:
-            return "체크아웃 날짜가 필요해요. 예: 2박 3일 또는 체크아웃 날짜를 함께 알려주세요."
+        if not _validate_date_range(check_in_obj, check_out_obj):
+            return "체크아웃 날짜를 다시 알려주세요. 체크아웃은 체크인보다 뒤여야 해요."
+
+        check_in = _to_iso(check_in_obj)
+        check_out = _to_iso(check_out_obj)
 
         all_hotels = []
 
         try:
-            from crawl_accommodation_booking_com import search_hotels_api as search_booking
             bk = search_booking(destination, check_in, check_out, guests)
             if bk:
                 for h in bk:
@@ -512,7 +498,6 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
             print(f"Booking.com Error: {e}")
 
         try:
-            from crawl_accommodation_amadeus import search_hotels_api as search_amadeus
             am = search_amadeus(destination, check_in, check_out, guests)
             if am:
                 for h in am:
@@ -534,9 +519,9 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
                 (all_hotels[item_index].get("name") or "")
                 if 0 <= item_index < len(all_hotels) else ""
             )
-            bot_message = f"✅ {chosen_name or (destination_kr + ' 호텔')} 예약을 진행할게요!"
+            bot_message = f"{chosen_name or (destination_kr + ' 호텔')} 예약을 진행할게요."
         else:
-            bot_message = f"🔍 {destination_kr} 숙소 검색이 완료됐어요! 예약할 숙소를 선택해 주세요."
+            bot_message = f"{destination_kr} 숙소 검색이 완료됐어요. 예약할 숙소를 선택해 주세요."
 
         return json.dumps({
             "__booking_action__": True,
@@ -553,39 +538,20 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
             "message": bot_message,
         }, ensure_ascii=False)
 
-    # ------------------------------------------------------------------
-    # 항공 예약
-    # ------------------------------------------------------------------
     else:
         origin = (params.get("origin") or "ICN").strip()
+        dep_date_str = (params.get("departure_date") or "").strip()
+        ret_date_str = (params.get("return_date") or "").strip()
 
-        departure_date_text = (params.get("departure_date_text") or "").strip()
-        return_date_text = (params.get("return_date_text") or "").strip()
-        duration_text = (params.get("duration_text") or "").strip()
-
-        dep_date_obj = resolve_date_expression(departure_date_text)
-        ret_date_obj = (
-            resolve_date_expression(return_date_text, base_date=dep_date_obj)
-            if return_date_text else None
-        )
-
-        if not ret_date_obj and duration_text:
-            ret_date_obj = infer_checkout_or_return(dep_date_obj, duration_text)
-
-        dep_date_obj, ret_date_obj = sanitize_date_range(dep_date_obj, ret_date_obj)
-
-        dep_date = to_iso(dep_date_obj)
-        ret_date = to_iso(ret_date_obj)
+        dep_date_obj = _parse_yyyy_mm_dd(dep_date_str)
+        ret_date_obj = _parse_yyyy_mm_dd(ret_date_str) if ret_date_str else None
 
         print("[DEBUG] normalized flight booking params:", {
             "origin": origin,
             "destination": destination,
             "destination_kr": destination_kr,
-            "departure_date_text": departure_date_text,
-            "return_date_text": return_date_text,
-            "duration_text": duration_text,
-            "departure_date": dep_date,
-            "return_date": ret_date,
+            "departure_date": dep_date_str,
+            "return_date": ret_date_str,
             "guests": guests,
             "already_chosen": already_chosen,
             "item_index": item_index,
@@ -594,22 +560,17 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
         if not destination:
             return "어느 지역으로 가는 항공권을 예약할까요? 예: 도쿄 항공권 예약해줘"
 
-        if not dep_date:
-            return "출국 날짜가 필요해요. 예: 다음주 금요일 도쿄 항공권 예약해줘"
+        if not _validate_future_date(dep_date_obj):
+            return "출국 날짜를 다시 알려주세요. 미래 날짜가 필요해요."
 
-        is_roundtrip_booking = bool(ret_date)
-        trip_type_label = (
-            f"왕복 ({dep_date} → {ret_date})"
-            if is_roundtrip_booking else
-            f"편도 ({dep_date})"
-        )
+        if ret_date_str and ret_date_obj is None:
+            return "귀국 날짜 형식이 올바르지 않아요. YYYY-MM-DD 형식으로 다시 알려주세요."
 
-        print(
-            f"✈️  [항공권 예약 타입] 🔁 {trip_type_label}"
-            if is_roundtrip_booking
-            else f"✈️  [항공권 예약 타입] ➡  {trip_type_label}"
-        )
-        print(f"✈️  [구간] {origin} → {destination} ({destination_kr}), 인원: {guests}명")
+        if ret_date_obj and ret_date_obj <= dep_date_obj:
+            return "귀국 날짜는 출국 날짜보다 뒤여야 해요."
+
+        dep_date = _to_iso(dep_date_obj)
+        ret_date = _to_iso(ret_date_obj)
 
         try:
             flight_raw = search_flight_offers(origin, destination, dep_date, ret_date)
@@ -624,13 +585,12 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
                 "날짜나 목적지를 바꿔 다시 시도해볼까요?"
             )
 
-        # 👉 그대로 저장 (혹은 기존 방식 유지)
         booking_store.save_temp_data(session_id, "flight", flight_raw)
 
         if already_chosen:
-            bot_message = f"✅ 항공편 예약을 진행할게요!"
+            bot_message = "항공편 예약을 진행할게요."
         else:
-            bot_message = f"🔍 {destination_kr} 항공권 검색이 완료됐어요! 예약할 항공편을 선택해 주세요."
+            bot_message = f"{destination_kr} 항공권 검색이 완료됐어요. 예약할 항공편을 선택해 주세요."
 
         return json.dumps({
             "__booking_action__": True,
@@ -665,13 +625,14 @@ def run_out_of_scope_tool(user_message: str, context: str = "") -> str:
 def run_tools_from_plan(
     plan: Dict[str, Any],
     context: str,
-    weather_date: Optional[dict] = None,
+    weather_data: Optional[dict] = None,
     long_term_memory: Optional[Dict[str, Any]] = None,
 ) -> str:
     plan = plan or {}
+    print("[DEBUG] plan:", plan)
+
     tool = plan.get("tools", [None])[0] or plan.get("tool") or "general_chat"
     user_message = plan.get("original_user_message", "")
-
     args = plan.get("args") or {}
 
     print(f"🚀 [Tool Execution] Tool: {tool}")
@@ -679,36 +640,28 @@ def run_tools_from_plan(
     if tool == "trip_ideation":
         return run_trip_ideation_tool(user_message, context)
     elif tool == "itinerary_planner":
-        return run_itinerary_planner_tool(user_message, context, plan.get("weather_data"))
+        return run_itinerary_planner_tool(user_message, context, weather_data)
     elif tool == "flight_search":
         return run_flight_search_tool(user_message, context)
     elif tool == "stay_search":
         return run_stay_search_tool(user_message, context)
-    elif tool == "accommodation_booking":
+    elif tool in ["accommodation_booking", "booking_action"]:
         return run_booking_action_tool(user_message, context)
     elif tool == "food_spot_search":
         return run_food_spot_search_tool(user_message, context)
     elif tool == "event_search":
         return run_event_search_tool(user_message, context)
-    
     elif tool == "transportation_search":
-        args = plan.get("args", {}) or {}
         return transportation_search(args, context)
-    
     elif tool == "transportation_batch":
-        args = plan.get("args", {}) or {}
         return transportation_batch(args, context)
-    
     elif tool == "travel_warning_search":
-        args = plan.get("args", {}) or {}
         country = (args.get("country") or "").strip()
         if country:
             return render_travel_warning(country)
         return run_travel_warning_tool(user_message, context)
     elif tool == "local_guide":
         return run_local_guide_tool(user_message, context)
-    elif tool == "booking_action":
-        return run_booking_action_tool(user_message, context)
     elif tool == "budget_planner":
         return call_gemini(BUDGET_SYSTEM, f"컨텍스트: {context}\n질문: {user_message}")
     elif tool == "out_of_scope":
