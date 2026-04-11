@@ -254,6 +254,8 @@ def build_context_summary_prompt(current_context: str, convo_text: str) -> str:
     아래 '이전 요약'과 '최근 대화'를 읽고, 반드시 지정한 형식으로만 업데이트된 요약을 작성하라. 절대 별표 기호를 쓰지 마라.
     {get_dynamic_date_rule()}
 
+    [중요] 이전 요약에 '[필수 적용 - 사용자 여행 성향 설문결과]' 섹션이 있다면, 해당 내용을 절대 삭제하지 말고 요약 맨 앞에 그대로 유지하라.
+
     [이전 요약]
     {current_context}
 
