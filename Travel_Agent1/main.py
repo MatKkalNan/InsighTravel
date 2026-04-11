@@ -78,6 +78,7 @@ class ChatRequest(BaseModel):
     message: str
     context: Optional[str] = ""
     history: Optional[List[Dict[str, str]]] = []
+    survey: Optional[Dict[str, str]] = None
 
 
 class ChatResponse(BaseModel):
@@ -91,6 +92,21 @@ class BookingConfirmRequest(BaseModel):
     booking_type: str
     item_index: int
     passenger_info: Dict[str, Any]
+
+
+# 세션별 설문 결과 인메모리 저장 (세션 유지)
+_survey_store: Dict[str, Dict[str, str]] = {}
+
+
+class SurveyRequest(BaseModel):
+    session_id: str
+    answers: Dict[str, str]
+
+
+@app.post("/survey")
+async def save_survey(req: SurveyRequest):
+    _survey_store[req.session_id] = req.answers
+    return {"status": "ok"}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -143,6 +159,19 @@ async def chat(request: ChatRequest):
             message=request.message,
         )
 
+        # 설문 결과를 context 최상단에 강하게 주입
+        survey_answers = request.survey or _survey_store.get(session_id, {})
+        survey_prefix = ""
+        if survey_answers:
+            survey_prefix = (
+                "[필수 적용 - 사용자 여행 성향 설문결과]\n"
+                f"여행 분위기 선호: {survey_answers.get('atmosphere', '미정')}\n"
+                f"예산 스타일: {survey_answers.get('budget', '미정')}\n"
+                f"여행 우선순위: {survey_answers.get('priority', '미정')}\n"
+                f"일정 스타일: {survey_answers.get('schedule', '미정')}\n"
+                "위 설문 결과를 숙소/항공/식당/일정 추천 시 최우선으로 반드시 반영하세요.\n\n"
+            )
+
         # 5) 날씨 데이터
         today_str = datetime.now().strftime("%Y-%m-%d")
         current_weather = get_insight_weather_data(37.5665, 126.9780, today_str)
@@ -156,7 +185,7 @@ async def chat(request: ChatRequest):
             "user_id": user_id,
             "session_id": session_id,
             "messages": messages,
-            "context": loaded_summary or request.context or "",
+            "context": survey_prefix + (loaded_summary or request.context or ""),
             "short_memory_summary": loaded_summary or "",
             "trip_goal": loaded_trip_goal,
             "trip_profile": loaded_trip_profile,
