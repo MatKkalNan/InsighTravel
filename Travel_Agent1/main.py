@@ -1,71 +1,51 @@
 # main.py
-'''
-목적 : FastAPI 서버를 구성하고, /chat 요청을 받아 LangGraph 
-파이프라인을 실행한 뒤 결과를 반환한다. 
-(DB는 현재 테이블 생성만 수행하며 대화 저장/불러오기는 아직 
-구현되지 않음)
-대화 히스토리를 프론트엔드에서 전달받아 단기 메모리로 사용한다. 
-추후 서비스 확장 시 DB 기반 장기 메모리로 전환 가능하도록 state 인터페이스는 유지한다
-
-(+수정 2026.02.12. 최우진)
-
-1. Base.metadata.create_all(bind=engine)
-
- - 기존: 모듈 import 시 실행
-
- - 변경: @app.on_event("startup")에서 실행
- -> import시 시작이 아니라 서버 시작시 실행으로 수정
-
-2. messages = request.history ...
-
- - 기존: 원본 리스트를 직접 수정할 수 있음
-
- - 변경: list(request.history)로 복사 후 append
- -> 프론트에서 채팅 histroy 꼬일 위험 줄어듦
-
- 3. DB 영향 범위 최소화
-
- -> DB의 발전 가능성은 남겨놓되 안정성 향상 
- <테스트 완료 - 오류 X>
-'''
-# main.py
-
 import os
 from typing import Optional, Dict, Any, List
-
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from dotenv import load_dotenv
 
 # [DB 관련]
-from database import engine
+from database import engine, SessionLocal
 from models import Base
 
 # [LangGraph 앱]
 from graph_app import chat_graph_app
 from graph_state import ChatState
 
-# [날씨 모듈 통합]
+# [날씨 모듈]
 from weather_info import get_insight_weather_data
 
 # [예약 기능]
 from booking_page_service import booking_store
 
+# [서비스 레이어]
+from user_service import get_or_create_demo_user
+from conversation_service import save_conversation_message
+from session_service import load_latest_session_summary, upsert_session_summary
+from trip_service import load_latest_trip, trip_to_state_payload, upsert_trip_from_state
+from memory_service import (
+    load_all_long_term_memories,
+    extract_long_term_memory,
+    save_long_term_memories,
+)
+
 load_dotenv()
 
-# (선택) DB 초기화 on/off 토글: 문제가 생기면 환경변수로 끌 수 있음
-# Windows PowerShell:  $env:ENABLE_DB_INIT="0"
-# Mac/Linux:           export ENABLE_DB_INIT=0
 ENABLE_DB_INIT = os.getenv("ENABLE_DB_INIT", "1") == "1"
+DEMO_EXTERNAL_ID = "demo-user"
+DEMO_SESSION_ID = "demo-session-1"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ===== Startup =====
     if ENABLE_DB_INIT:
         Base.metadata.create_all(bind=engine)
         print("✅ DB 테이블 초기화 완료 (create_all)")
@@ -73,9 +53,6 @@ async def lifespan(app: FastAPI):
         print("ℹ️ DB 테이블 초기화 비활성화 (ENABLE_DB_INIT=0)")
 
     yield
-
-    # ===== Shutdown =====
-    # 필요 시 종료 처리(예: 리소스 정리) 추가
     print("👋 Server shutdown complete")
 
 
@@ -83,18 +60,25 @@ app = FastAPI(title="Hybrid Travel Agent (OpenAI + Gemini)", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 데모용: 운영이면 특정 origin만 허용 권장
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+BASE_DIR = Path(__file__).resolve().parent
+
+# static 폴더의 절대 경로
+STATIC_DIR = BASE_DIR / "static"
+
+# 마운트
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 class ChatRequest(BaseModel):
     message: str
     context: Optional[str] = ""
-    # 프론트엔드에서 이전 대화 기록을 넘겨줄 경우
     history: Optional[List[Dict[str, str]]] = []
+    survey: Optional[Dict[str, str]] = None
 
 
 class ChatResponse(BaseModel):
@@ -103,9 +87,30 @@ class ChatResponse(BaseModel):
     trip_goal: Optional[Dict[str, Any]] = None
 
 
+class BookingConfirmRequest(BaseModel):
+    session_id: str
+    booking_type: str
+    item_index: int
+    passenger_info: Dict[str, Any]
+
+
+# 세션별 설문 결과 인메모리 저장 (세션 유지)
+_survey_store: Dict[str, Dict[str, str]] = {}
+
+
+class SurveyRequest(BaseModel):
+    session_id: str
+    answers: Dict[str, str]
+
+
+@app.post("/survey")
+async def save_survey(req: SurveyRequest):
+    _survey_store[req.session_id] = req.answers
+    return {"status": "ok"}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    # 간단한 테스트용 UI가 있다면 로드, 없으면 텍스트 반환
     html_path = os.path.join(os.path.dirname(__file__), "chat.html")
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
@@ -115,62 +120,144 @@ async def index():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    # 1. 메세지 히스토리 정리
-    # history 원본을 직접 수정하지 않도록 복사해서 사용 (중복/오염 방지)
-    messages = list(request.history) if request.history else []
-    messages.append({"role": "user", "content": request.message})
-    
-    # 2. 날씨 모듈 통합 (날씨 데이터를 가져와 변수에 저장) 
-    from datetime import datetime
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    
-    current_weather = get_insight_weather_data(37.5665, 126.9780, today_str)
-    # 현재는 서울(37.5665, 126.9780) 기준으로 호출
-    # 추후 사용자의 목적지가 확정되면 해당 좌표를 동적으로 넣도록 개선필요
-    
-    print(f"--- [DEBUG 1] API 호출 결과: {current_weather is not None} ---")
-    if current_weather:
-        print(f"--- [DEBUG 2] 데이터 샘플: {str(current_weather)[:100]}... ---")
-    
-    # 3. LangGraph 초기 상태 설정
+    db = SessionLocal()
+    try:
+        # 1) demo user 보장
+        demo_user = get_or_create_demo_user(
+            db=db,
+            external_id=DEMO_EXTERNAL_ID,
+            name="Demo User",
+        )
+        user_id = demo_user.id
+        session_id = DEMO_SESSION_ID
 
-    initial_state: ChatState = {
-        "messages": messages,
-        "context": request.context or "",
-        "trip_goal": None,
-        "plan": None,
-        "tool_output": None,
-        "weather_data": current_weather, 
-    }
+        # 2) preload
+        loaded_summary = load_latest_session_summary(
+            db=db,
+            user_id=user_id,
+            session_id=session_id,
+        )
 
-    # 그래프 실행 (Start -> Context -> Goal -> Planner -> Tool -> End)
-    result = chat_graph_app.invoke(initial_state)
-    
-    # [디버깅 추가] 에이전트에게 전달된 날씨 데이터가 실제로 있는지 확인
-    print(f"DEBUG: 에이전트에게 전달된 날씨 데이터 -> {result.get('weather_data') is not None}")
+        loaded_trip = load_latest_trip(db=db, user_id=user_id)
+        loaded_trip_goal, loaded_trip_profile, loaded_constraints = trip_to_state_payload(loaded_trip)
 
+        loaded_long_term_memory = load_all_long_term_memories(
+            db=db,
+            user_id=user_id,
+            limit=10,
+        )
 
-    return ChatResponse(
-        reply=result.get("tool_output", "처리 중 오류가 발생했습니다."),
-        plan=result.get("plan", {}) or {},
-        trip_goal=result.get("trip_goal", {}) or {},
-    )
+        # 3) 메시지 구성
+        messages = list(request.history) if request.history else []
+        messages.append({"role": "user", "content": request.message})
+
+        # 4) user message 저장
+        user_row = save_conversation_message(
+            db=db,
+            user_id=user_id,
+            role="user",
+            message=request.message,
+        )
+
+        # 설문 결과를 context 최상단에 강하게 주입
+        survey_answers = request.survey or _survey_store.get(session_id, {})
+        survey_prefix = ""
+        if survey_answers:
+            survey_prefix = (
+                "[필수 적용 - 사용자 여행 성향 설문결과]\n"
+                f"여행 분위기 선호: {survey_answers.get('atmosphere', '미정')}\n"
+                f"예산 스타일: {survey_answers.get('budget', '미정')}\n"
+                f"여행 우선순위: {survey_answers.get('priority', '미정')}\n"
+                f"일정 스타일: {survey_answers.get('schedule', '미정')}\n"
+                "위 설문 결과를 숙소/항공/식당/일정 추천 시 최우선으로 반드시 반영하세요.\n\n"
+            )
+
+        # 5) 날씨 데이터
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        current_weather = get_insight_weather_data(37.5665, 126.9780, today_str)
+
+        print(f"--- [DEBUG 1] API 호출 결과: {current_weather is not None} ---")
+        if current_weather:
+            print(f"--- [DEBUG 2] 데이터 샘플: {str(current_weather)[:100]}... ---")
+
+        # 6) LangGraph 초기 상태
+        initial_state: ChatState = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "messages": messages,
+            "context": survey_prefix + (loaded_summary or request.context or ""),
+            "short_memory_summary": loaded_summary or "",
+            "trip_goal": loaded_trip_goal,
+            "trip_profile": loaded_trip_profile,
+            "constraints": loaded_constraints,
+            "long_term_memory": loaded_long_term_memory,
+            "plan": None,
+            "tool_output": None,
+            "tool_results": {},
+            "replan": {"count": 0},
+            "weather_data": current_weather,
+        }
+
+        # 7) 그래프 실행
+        result = chat_graph_app.invoke(initial_state)
+
+        print(f"DEBUG: 에이전트에게 전달된 날씨 데이터 -> {result.get('weather_data') is not None}")
+
+        # 8) assistant message 저장
+        assistant_reply = result.get("tool_output", "처리 중 오류가 발생했습니다.")
+        assistant_row = save_conversation_message(
+            db=db,
+            user_id=user_id,
+            role="assistant",
+            message=assistant_reply,
+        )
+
+        # 9) 최신 summary 저장
+        latest_context = result.get("context", "") or ""
+        upsert_session_summary(
+            db=db,
+            user_id=user_id,
+            session_id=session_id,
+            summary=latest_context,
+        )
+
+        # 10) trip 상태 저장
+        upsert_trip_from_state(
+            db=db,
+            user_id=user_id,
+            state=result,
+        )
+
+        # 11) 장기 기억 추출 및 저장
+        memory_payload = extract_long_term_memory(
+            user_message=request.message,
+            context=latest_context,
+        )
+
+        saved_count = save_long_term_memories(
+            db=db,
+            user_id=user_id,
+            source_message_id=user_row.id,
+            memory_payload=memory_payload,
+        )
+        print(f"✅ saved long-term memories: {saved_count}")
+
+        return ChatResponse(
+            reply=assistant_reply,
+            plan=result.get("plan", {}) or {},
+            trip_goal=result.get("trip_goal", {}) or {},
+        )
+
+    finally:
+        db.close()
 
 
 # -------------------------------------------------------------------
 # [예약 기능] 가짜 예약 웹사이트 엔드포인트
 # -------------------------------------------------------------------
 
-class BookingConfirmRequest(BaseModel):
-    session_id: str
-    booking_type: str       # "hotel" or "flight"
-    item_index: int
-    passenger_info: Dict[str, Any]
-
-
 @app.get("/booking/hotel", response_class=HTMLResponse)
 async def booking_hotel_page(session_id: str = ""):
-    """호텔 예약 페이지 (iframe으로 로드됨)"""
     html_path = os.path.join(os.path.dirname(__file__), "booking_hotel.html")
     with open(html_path, "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
@@ -178,7 +265,6 @@ async def booking_hotel_page(session_id: str = ""):
 
 @app.get("/booking/flight", response_class=HTMLResponse)
 async def booking_flight_page(session_id: str = ""):
-    """항공권 예약 페이지 (iframe으로 로드됨)"""
     html_path = os.path.join(os.path.dirname(__file__), "booking_flight.html")
     with open(html_path, "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
@@ -186,22 +272,18 @@ async def booking_flight_page(session_id: str = ""):
 
 @app.get("/api/booking/data")
 async def get_booking_data(session_id: str, type: str = "hotel"):
-    """예약 페이지에서 호텔/항공편 데이터를 가져가는 API"""
     data = booking_store.get_temp_data(session_id, type)
     return JSONResponse({"items": data, "session_id": session_id})
 
 
 @app.post("/booking/confirm")
 async def confirm_booking(req: BookingConfirmRequest):
-    """가짜 예약 확인 처리"""
     booking = booking_store.confirm_booking(
-        req.session_id, req.booking_type,
-        req.item_index, req.passenger_info
+        req.session_id, req.booking_type, req.item_index, req.passenger_info
     )
     return JSONResponse(booking)
 
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
