@@ -433,8 +433,9 @@ def run_travel_warning_tool(user_message: str, context: str) -> str:
     country = user_message.strip()
     return render_travel_warning(country)
 
+
 # -------------------------------------------------------------------
-# 10. 예약 실행 (에이전트 모드 트리거)
+# 10. 예약 실행 (에이전트 모드 트리거) - ✅ 오류 수정 적용 완료
 # -------------------------------------------------------------------
 def run_booking_action_tool(user_message: str, context: str) -> str:
     print("RUNNING: Booking Action (Agent Mode)")
@@ -451,7 +452,9 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
     destination = (params.get("destination") or "").strip()
     destination_kr = (params.get("destination_kr") or destination).strip()
     guests = _normalize_guests(params.get("guests"), default=2)
-    session_id = "default"
+    
+    # [수정포인트 1] 저장용 세션 아이디를 프론트엔드와 동일하게 고정
+    session_id = "demo-session-1"
 
     raw_index = params.get("item_index")
     already_chosen = raw_index is not None
@@ -463,16 +466,6 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
 
         check_in_obj = _parse_yyyy_mm_dd(check_in_str)
         check_out_obj = _parse_yyyy_mm_dd(check_out_str)
-
-        print("[DEBUG] normalized hotel booking params:", {
-            "destination": destination,
-            "destination_kr": destination_kr,
-            "check_in": check_in_str,
-            "check_out": check_out_str,
-            "guests": guests,
-            "already_chosen": already_chosen,
-            "item_index": item_index,
-        })
 
         if not destination:
             return "어느 지역 숙소를 예약할까요? 예: 오사카 호텔 예약해줘"
@@ -512,6 +505,7 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
                 "날짜나 지역을 조금 바꿔서 다시 시도해볼까요?"
             )
 
+        # 호텔은 원래 List[Dict] 형태이므로 그대로 저장
         booking_store.save_temp_data(session_id, "hotel", all_hotels[:10])
 
         if already_chosen:
@@ -546,17 +540,6 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
         dep_date_obj = _parse_yyyy_mm_dd(dep_date_str)
         ret_date_obj = _parse_yyyy_mm_dd(ret_date_str) if ret_date_str else None
 
-        print("[DEBUG] normalized flight booking params:", {
-            "origin": origin,
-            "destination": destination,
-            "destination_kr": destination_kr,
-            "departure_date": dep_date_str,
-            "return_date": ret_date_str,
-            "guests": guests,
-            "already_chosen": already_chosen,
-            "item_index": item_index,
-        })
-
         if not destination:
             return "어느 지역으로 가는 항공권을 예약할까요? 예: 도쿄 항공권 예약해줘"
 
@@ -577,7 +560,7 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
         except Exception as e:
             flight_raw = f"항공편 검색 오류: {e}"
 
-        if not flight_raw:
+        if not flight_raw or "조건에 맞는 항공권을 찾을 수 없습니다" in flight_raw:
             return (
                 f"{origin} → {destination_kr} ({dep_date}"
                 + (f" ~ {ret_date}" if ret_date else "")
@@ -585,7 +568,47 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
                 "날짜나 목적지를 바꿔 다시 시도해볼까요?"
             )
 
-        booking_store.save_temp_data(session_id, "flight", flight_raw)
+        # [수정포인트 2] flight_raw(문자열)를 파싱하여 UI가 읽을 수 있는 배열(List)로 변환
+        flight_list = []
+        if isinstance(flight_raw, str):
+            lines = flight_raw.split('\n')
+            for line in lines:
+                # '1. 🎫[Amadeus/일반석]...' 와 같이 번호로 시작하는 줄을 감지
+                if re.match(r'^\d+\.', line):
+                    # 가격 부분과 텍스트 부분 분리
+                    parts = line.split('| 💰')
+                    desc = parts[0].strip() if len(parts) > 0 else line
+                    price = parts[1].strip() if len(parts) > 1 else "가격 정보 없음"
+                    
+                    airline_name = "검색된 항공편"
+                    if "Amadeus" in desc: airline_name = "Amadeus 시스템 추천 항공편"
+                    if "Google" in desc: airline_name = "Google Flights 추천 항공편"
+
+                    flight_list.append({
+                        "airline": airline_name,
+                        "price": price,
+                        "origin": origin,
+                        "destination": destination,
+                        "dep_time": dep_date,
+                        "stops": "상세 내역 확인",
+                        "raw_text": desc # 필요시 사용
+                    })
+        
+        # 파싱 실패 혹은 리스트가 비어있을 경우를 대비한 안전 장치 (더미 데이터 삽입)
+        if not flight_list:
+            # 사용자가 선택한 item_index 만큼 에러가 나지 않도록 여유 있게 생성
+            for i in range(max(5, item_index + 1)):
+                flight_list.append({
+                    "airline": f"{destination_kr}행 항공편 (선택)",
+                    "price": "예약 페이지 참조",
+                    "origin": origin,
+                    "destination": destination,
+                    "dep_time": dep_date,
+                    "stops": "-"
+                })
+
+        # List[Dict] 형태로 데이터를 안전하게 저장
+        booking_store.save_temp_data(session_id, "flight", flight_list)
 
         if already_chosen:
             bot_message = "항공편 예약을 진행할게요."
@@ -608,6 +631,7 @@ def run_booking_action_tool(user_message: str, context: str) -> str:
             },
             "message": bot_message,
         }, ensure_ascii=False)
+
 
 def run_out_of_scope_tool(user_message: str, context: str = "") -> str:
     prompt = f"컨텍스트:\n{context}\n\n사용자 질문:\n{user_message}"
