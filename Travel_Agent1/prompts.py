@@ -37,16 +37,104 @@ _TODAY = _NOW.strftime("%Y-%m-%d")
 _YEAR = _NOW.year
 
 # ==============================================================================
+# [공통 제어 규칙 3] 설문 기반 페르소나 및 맞춤형 추천 규칙
+# ==============================================================================
+def get_survey_persona_rule(survey: dict) -> str:
+    """숙소, 기본 응답 등 범용적으로 사용되는 페르소나 지침"""
+    if not survey:
+        return ""
+    
+    rules = []
+    
+    atmosphere = survey.get('atmosphere', '')
+    if '도심' in atmosphere:
+        rules.append("- 🏙️ [분위기]: 번화가, 대형 쇼핑몰, 핫플레이스, 야경 명소 위주로 추천하세요.")
+    elif '자연' in atmosphere:
+        rules.append("- 🌿 [분위기]: 국립공원, 바다, 숲, 한적하고 조용한 힐링 스팟 위주로 추천하세요.")
+    
+    budget = survey.get('budget', '')
+    if '가성비' in budget:
+        rules.append("- 💰 [숙소/맛집]: 3성급 이하 가성비 숙소, 로컬 길거리 음식이나 가성비 식당을 우선 추천하세요.")
+    elif '프리미엄' in budget:
+        rules.append("- ✨ [숙소/맛집]: 4~5성급 고급 호텔/리조트, 파인다이닝, 분위기 좋은 럭셔리 식당을 우선 추천하세요.")
+        
+    if not rules:
+        return ""
+        
+    persona_text = "\n".join(rules)
+    return f"""
+    [🔥 사용자 맞춤형 추천 절대 지침 🔥]
+    사용자의 사전 설문 결과에 따라 아래 지침을 1순위로 반영하여 답변하세요. 이 지침에 어긋나는 추천은 피해야 합니다.
+    {persona_text}
+    """
+
+def get_itinerary_survey_rule(survey: dict) -> str:
+    """일정(Itinerary) 작성을 위한 전용 페르소나 지침"""
+    if not survey:
+        return ""
+    
+    rules = ["[🔥 일정 추천 절대 지침 🔥] 사용자의 성향에 맞춰 아래 규칙을 1순위로 적용하여 일정을 작성하세요."]
+    
+    atmosphere = survey.get('atmosphere', '')
+    if '도심' in atmosphere:
+        rules.append("- [동선 컨셉]: 랜드마크, 번화가, 핫플레이스, 야경 명소를 중심으로 동선을 짜세요.")
+    elif '자연' in atmosphere:
+        rules.append("- [동선 컨셉]: 공원, 바다, 산책로 등 자연경관이 뛰어나고 한적한 힐링 스팟을 포함하세요.")
+    
+    priority = survey.get('priority', '')
+    if '관람' in priority:
+        rules.append("- [주요 스팟]: 유명 관광지, 박물관, 액티비티를 하루 2~3개 이상 포함하세요.")
+    elif '식도락' in priority:
+        rules.append("- [주요 스팟]: 식사와 디저트가 메인입니다. 명소보다 '유명 맛집/카페'를 중심으로 동선을 짜고, 식사 시간을 넉넉히 배정하세요.")
+    elif '휴식' in priority:
+        rules.append("- [주요 스팟]: 일정을 무리하게 잡지 마세요. 뷰가 좋은 카페나 숙소 근처 산책 등 정적인 활동을 배치하세요.")
+
+    schedule = survey.get('schedule', '')
+    if '계획' in schedule:
+        rules.append("- [일정표 형식]: 오전 09:00부터 저녁 21:00까지 시간대별로 촘촘하게 분 단위/시간 단위 일정을 작성하세요. 장소 간 이동 시간과 수단도 명시하세요.")
+    elif '즉흥' in schedule:
+        rules.append("- [일정표 형식]: 시간표를 빡빡하게 짜지 마세요! '오전 추천 스팟 1개', '오후 추천 스팟 1개' 식으로 큼직하게 제안하고, 발길 닿는 대로 갈 수 있는 주변 옵션(플랜B)을 가볍게 덧붙이세요.")
+    else:
+        rules.append("- [일정표 형식]: 하루에 반드시 가야 할 핵심 명소 1~2개만 고정하고, 나머지 시간은 유동적으로 쓸 수 있게 여유롭게 배치하세요.")
+
+    return "\n".join(rules)
+
+def get_flight_survey_rule(survey: dict) -> str:
+    """항공권(Flight) 검색을 위한 전용 페르소나 지침"""
+    if not survey:
+        return ""
+    
+    rules = ["[🔥 항공권 추천 절대 지침 🔥] 사용자의 성향에 맞춰 아래 기준을 바탕으로 상위 3개의 항공권을 골라주세요."]
+    
+    budget = survey.get('budget', '')
+    if '가성비' in budget:
+        rules.append("- [우선순위]: '최저가'가 최우선입니다. 새벽/밤 비행기나 저가항공(LCC)이더라도 가격이 저렴한 옵션을 1순위로 추천하세요.")
+    elif '프리미엄' in budget:
+        rules.append("- [우선순위]: '편안함'이 최우선입니다. 대형항공사(FSC) 직항을 우선 추천하고, 너무 이른 새벽이나 심야 비행기는 제외하세요.")
+    
+    schedule = survey.get('schedule', '')
+    if '계획' in schedule:
+        rules.append("- [시간대]: 현지 체류 시간을 극대화할 수 있는 '아침 출국 - 저녁 귀국' 꽉 찬 일정의 항공권을 추천하세요.")
+    elif '즉흥' in schedule or '휴식' in survey.get('priority', ''):
+        rules.append("- [시간대]: 피로도를 낮추기 위해 '오후 출발'이나 '낮 시간대 도착' 등 수면 패턴을 해치지 않는 여유로운 시간대의 항공권을 포함해 보세요.")
+
+    return "\n".join(rules)
+
+
+# ==============================================================================
 # [1] Tools 프롬프트 (tools.py 관련)
 # ==============================================================================
 
 # 1-1. 여행지 아이데이션
 IDEATION_SYSTEM = "당신은 여행 큐레이터입니다."
 
-def build_ideation_user_prompt(context: str, user_message: str) -> str:
+def build_ideation_user_prompt(context: str, user_message: str, survey: dict = None) -> str:
+    persona_rule = get_survey_persona_rule(survey)
     return f"""
     [대화 맥락] {context}
     [사용자 요청] {user_message}
+    
+    {persona_rule}
     
     사용자의 취향, 예산, 계절감을 고려해 여행지 3~5곳을 추천하고 이유를 설명하세요.
     {get_strict_output_rule()}
@@ -60,11 +148,14 @@ JSON 형식으로만 출력: {"destination": "Jeju", "is_korea": true}
 
 ITINERARY_SYSTEM = "당신은 여행 플래너입니다. 동선과 효율성을 고려해 일정을 계획합니다."
 
-def build_itinerary_user_prompt(user_message: str, places_info: str, weather_info_text: str) -> str:
+def build_itinerary_user_prompt(user_message: str, places_info: str, weather_info_text: str, survey: dict = None) -> str:
+    survey_rule = get_itinerary_survey_rule(survey)
     return f"""
     [사용자 요청] {user_message}
     [검색된 장소 데이터] {places_info}
     {weather_info_text}
+    
+    {survey_rule}
     
     [지침 - 엄격 준수]
     1. [최상단 날씨 및 옷차림 안내] 답변의 가장 첫 줄에 날짜별로 오전, 오후 날씨(기온, 맑음/비 등 상태, 강수확률)를 정확하게 나누어 평문으로 작성하고, 사용자가 옷차림을 정하기 쉽도록 적절한 팁을 짧게 덧붙이세요.
@@ -94,7 +185,7 @@ def build_flight_param_prompt() -> str:
     {get_dynamic_date_rule()}
     
     1. origin, destination은 반드시 IATA 공항 코드 3자리 대문자로 출력하세요. (예: ICN, OSA, NRT)
-       - 사용자가 출발지를 말하지 않았으면 무조건 "ICN"을 기본값으로 출력하세요. ("미정" 등 한글 절대 금지)
+        - 사용자가 출발지를 말하지 않았으면 무조건 "ICN"을 기본값으로 출력하세요. ("미정" 등 한글 절대 금지)
     2. departureDate, returnDate는 반드시 하이픈(-)이 포함된 "YYYY-MM-DD" 형식이어야 합니다. (공백 사용 금지)
     
     JSON 형식: {{"origin": "ICN", "destination": "OSA", "departureDate": "{_YEAR}-05-15", "return_date": "{_YEAR}-05-18" or null}}
@@ -109,10 +200,13 @@ JSON: {{"destination": "Seoul", "check_in": "{_YEAR}-05-01", "check_out": "{_YEA
 
 STAY_SYSTEM = "호텔 컨시어지로서 최적의 숙소를 추천합니다."
 
-def build_stay_user_prompt(user_message: str, raw_text: str) -> str:
+def build_stay_user_prompt(user_message: str, raw_text: str, survey: dict = None) -> str:
+    persona_rule = get_survey_persona_rule(survey)
     return f"""사용자 요청: {user_message}
 [통합 숙소 데이터]
 {raw_text}
+
+{persona_rule}
 
 [필수 지침]
 위 데이터 중 가장 추천할 만한 상위 3곳의 숙소를 골라 이름, 가격, 평점을 안내해 주세요. (1개만 안내하지 말고 반드시 3곳을 선정할 것)
@@ -127,10 +221,14 @@ JSON: {"query": "상하이 맛집", "place_type": "restaurant"}
 
 FOOD_SYSTEM = "미식 및 명소 가이드입니다."
 
-def build_food_user_prompt(user_message: str, data_text: str) -> str:
+def build_food_user_prompt(user_message: str, data_text: str, survey: dict = None) -> str:
+    persona_rule = get_survey_persona_rule(survey)
     return f"""요청: {user_message}
 데이터:
 {data_text}
+
+{persona_rule}
+
 {get_strict_output_rule()}
 """
 
@@ -167,25 +265,29 @@ def build_local_guide_user_prompt(context: str, user_message: str, transit_data:
     {get_strict_output_rule()}
     """
 
-# 1-8. 예약 실행
+# 1-8. 예약 실행 (★ 항공권/숙소 인덱스 추출 집중 강화 ★)
 def build_booking_param_prompt() -> str:
     return f"""
-    예약 파라미터를 추출하세요. 
+    예약 시스템 연결을 위한 파라미터를 추출하세요. 
     {get_dynamic_date_rule()}
     
-    - booking_type: "hotel" 또는 "flight" (항공권 관련 단어가 있으면 무조건 "flight")
-    - destination: 목적지 IATA 공항 코드 3자리 대문자 (예: OSA, NRT). 
-    - destination_kr: 목적지 한국어명 (예: 오사카)
-    - check_in / departure_date: (YYYY-MM-DD 형식, 하이픈 필수)
-    - check_out / return_date: (YYYY-MM-DD 형식, 하이픈 필수)
-    - guests: 인원 수 (int, 기본 2)
-    - origin: 출발 공항 IATA 코드 (언급 없으면 무조건 "ICN", "미정" 절대 금지)
-    - item_index: 사용자가 대화 중 숙소 이름이나 순서(첫 번째 등)를 지정해 예약을 확정하려고 한 경우, 해당 항목의 0부터 시작하는 숫자 인덱스(0, 1, 2). 지정하지 않았다면 null.
+    [추출 규칙]
+    1. booking_type: "hotel" 또는 "flight" (항공권, 비행기, 항공사 등이 언급되면 무조건 "flight")
+    2. item_index: 사용자가 대화 중 숙소 이름이나 순서를 지정해 예약을 확정하려고 한 경우, 해당 항목의 순서(0부터 시작하는 숫자).
+       - 예: "첫 번째", "맨 위", "제일 싼거" -> 0
+       - 예: "두 번째", "중간 거" -> 1
+       - 예: 항공사명(예: "티웨이", "대한항공")이나 숙소명을 직접 지칭했다면, 리스트에서 해당 이름이 위치할 법한 순서 번호를 할당하세요. 
+       - 불명확하다면 기본값 0을 설정하세요. 절대 null로 두지 마세요.
+    3. destination: 목적지 IATA 공항 코드 3자리 대문자 (예: OSA, NRT). 
+    4. destination_kr: 목적지 한국어명 (예: 오사카)
+    5. check_in / departure_date: (YYYY-MM-DD 형식, 하이픈 필수)
+    6. check_out / return_date: (YYYY-MM-DD 형식, 하이픈 필수)
+    7. guests: 인원 수 (int, 기본 2)
+    8. origin: 출발 공항 IATA 코드 (언급 없으면 무조건 "ICN", "미정" 절대 금지)
 
     JSON만 출력:
-    {{"booking_type": "hotel", "destination": "OSA", "destination_kr": "오사카", "check_in": "{_YEAR}-05-15", "check_out": "{_YEAR}-05-18", "departure_date": null, "return_date": null, "guests": 2, "origin": "ICN", "item_index": 0}}
+    {{"booking_type": "flight", "destination": "OSA", "destination_kr": "오사카", "check_in": null, "check_out": null, "departure_date": "{_YEAR}-05-15", "return_date": "{_YEAR}-05-18", "guests": 2, "origin": "ICN", "item_index": 0}}
     """
-
 
 # 1-9. 기타
 BUDGET_SYSTEM = "예산 전문가입니다."
@@ -194,7 +296,6 @@ DEFAULT_AGENT_SYSTEM = """당신은 친절한 여행 에이전트입니다.
 사용자의 질문이 명확한 여행 관련 요청이 아니라면(예: 의미 없는 단어, 동문서답), 이전 턴에서 예산이나 인원을 물어봤더라도 억지로 다시 캐묻거나 값을 지어내지 마세요.
 "어떤 여행을 계획 중이신가요? 편하게 말씀해 주세요!"라고 대화를 리셋하며 친절하게 물어보세요. 마크다운 기호나 특수문자 없이 간결하게 평문으로 대답하세요."""
 
-# 새로 추가되는 헛소리 차단(out_of_scope) 전용 프롬프트
 OUT_OF_SCOPE_SYSTEM = """당신은 친절하고 다정한 여행 전문 에이전트입니다.
 사용자가 여행과 무관한 단어(예: 봉봉, ㅋㅋ, 안녕 등), 일상 대화, 농담, 혹은 다른 분야의 주제를 꺼낼 경우 다음과 같이 대답해야 합니다.
 
@@ -206,22 +307,24 @@ OUT_OF_SCOPE_SYSTEM = """당신은 친절하고 다정한 여행 전문 에이�
 """
 
 # ==============================================================================
-# [2] Planner 프롬프트 (planner.py 관련)
+# [2] Planner 프롬프트 (planner.py 관련) ★ 예약 선택 시 무조건 booking_action으로 가도록 규칙 강화 ★
 # ==============================================================================
 PLANNER_SYSTEM_PROMPT = """
 당신은 여행 전용 플래너(Planner)입니다. 사용자의 질문에 여러 요구사항이 포함된 경우, 'tools' 배열에 필요한 모든 도구를 포함하세요.
 
 [판단 규칙]
-1. 사용자가 날씨를 물으면 반드시 "local_guide"를 포함하세요.
-2. 축제, 행사, 전시회를 물으면 반드시 "event_search"를 포함하세요.
-3. 일정과 함께 날씨/행사를 물으면 ["itinerary_planner", "local_guide", "event_search"] 처럼 모두 포함해야 합니다.
+1. [매우 중요] 사용자가 추천된 항공권이나 숙소 리스트 중 하나를 선택하여 예약을 확정하려는 의도(예: "첫 번째 걸로 예약해줘", "티웨이로 할게", "이 숙소 결제할래")가 보이면 **무조건 "booking_action" 도구만 사용**하세요.
+2. 단순히 숙소 리스트를 추천해 달라고 하거나, 항공권 가격을 물어보면 "flight_search"나 "stay_search"를 유지하세요.
+3. 사용자가 날씨를 물으면 반드시 "local_guide"를 포함하세요.
+4. 축제, 행사, 전시회를 물으면 반드시 "event_search"를 포함하세요.
+5. 일정과 함께 날씨/행사를 물으면 ["itinerary_planner", "local_guide", "event_search"] 처럼 모두 포함해야 합니다.
 
 [도구 목록]
+- "booking_action" : 실제 예약 진행/확정 호출 (args: booking_type, item_index 필수 포함)
 - "trip_ideation" : 목적지 제안
 - "itinerary_planner" : 일정 계획 (구글맵 4.0 이상, 한국은 네이버 보완)
 - "flight_search" : 항공권 검색
 - "stay_search" : 숙소 지역 추천 및 검색 리스트 보기 (3곳 추천)
-- "booking_action" : 실제 예약 진행/확정 호출 ([매우 중요] 사용자가 특정 호텔이나 항공권을 고른 뒤 예약 확정을 요청할 때는 무조건 이 도구만 사용)
 - "food_spot_search" : 맛집/카페 검색 (구글맵 4.0 이상, 한국은 네이버 보완)
 - "local_guide" : 현지 정보 안내 (교통, 날씨 등)
 - "budget_planner" : 예산 배분 전략
@@ -315,10 +418,13 @@ def build_goal_extraction_user_prompt(context: str, user_message: str, previous_
 # ==============================================================================
 FLIGHT_SUMMARY_SYSTEM = "당신은 항공권 컨설턴트입니다."
 
-def build_flight_summary_user_prompt(user_query: str, flight_raw_data: str) -> str:
+def build_flight_summary_user_prompt(user_query: str, flight_raw_data: str, survey: dict = None) -> str:
+    survey_rule = get_flight_survey_rule(survey)
     return f"""
     [사용자 질문] {user_query}
     [항공권 데이터] {flight_raw_data}
+    
+    {survey_rule}
     
     가장 추천할 만한 옵션 3가지를 정리하세요. URL은 그대로 출력하세요.
     {get_strict_output_rule()}
