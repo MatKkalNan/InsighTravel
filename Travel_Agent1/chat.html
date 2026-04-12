@@ -55,7 +55,7 @@
     /* 채팅 영역 */
     .chat-panel { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
     .chat-header { padding: 12px 16px; border-bottom: 1px solid #eee; font-weight: 600; font-size: 15px; background: #ffffff; }
-    .chat-log { display: flex; flex: 1; padding: 16px; overflow-y: auto; background: #ffffff; }
+    .chat-log { display: flex; flex: 1; padding: 16px; overflow-y: auto; background: #ffffff; flex-direction: column; align-content: flex-start; }
 
     /* 메시지 스타일 */
     .message { margin-bottom: 12px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
@@ -63,10 +63,10 @@
     .message.assistant { align-self: flex-start; background: #e5effa; border-radius: 16px 16px 16px 2px; padding: 8px 12px; border: 1px solid #e1e1e1; }
     
     /* 메시지 행 레이아웃 */
-    .message-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px;}
-    .message-row.assistant { flex-direction: row;}
+    .message-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; width: 100%; flex-shrink: 0; }
+    .message-row.assistant { flex-direction: row; }
 
-    .message-row.user { flex-direction: row-reverse; justify-content: flex-end;}
+    .message-row.user { flex-direction: row-reverse; justify-content: flex-end; }
 
     /* 프로필 이미지 */
     .profile-avatar { width: 60px;height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0;}
@@ -574,7 +574,7 @@
       setTimeout(() => renderSurveyCard(), 300);
     }
 
-    // 채팅 시작 시 설문 표시
+    // 채팅 시작 시 환영 메시지 표시
     window.addEventListener("DOMContentLoaded", () => {
       showWelcomeMessage();
     });
