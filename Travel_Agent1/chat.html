@@ -34,10 +34,28 @@
     .history-item:hover { background-color: #edf2f7;}
     .history-item.active { background-color: #ffffff; font-weight: 600; }
 
+    /* 사이드바 아이템 레이아웃 수정 */
+    .history-item {
+    display: flex !important; justify-content: space-between; align-items: center; padding: 10px 12px;
+    border-radius: 8px; font-size: 14px; color: #4a5568; cursor: pointer; position: relative;
+    margin-bottom: 4px; }
+
+    .item-actions {
+    display: none; /* 평소에는 숨김 */ gap: 4px; align-items: center; margin-left: 8px;}
+
+    .history-item:hover .item-actions {
+    display: flex !important; /* 호버 시 표시 */}
+
+    .action-btn {
+    background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;
+    border-radius: 4px; line-height: 1;}
+
+    .action-btn:hover { background: #e2e8f0;}
+
     /* 채팅 영역 */
     .chat-panel { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
     .chat-header { padding: 12px 16px; border-bottom: 1px solid #eee; font-weight: 600; font-size: 15px; background: #ffffff; }
-    .chat-log { flex: 1; padding: 16px; overflow-y: auto; background: #ffffff; }
+    .chat-log { display: flex; flex: 1; padding: 16px; overflow-y: auto; background: #ffffff; flex-direction: column; align-content: flex-start; }
 
     /* 메시지 스타일 */
     .message { margin-bottom: 12px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
@@ -45,10 +63,10 @@
     .message.assistant { align-self: flex-start; background: #e5effa; border-radius: 16px 16px 16px 2px; padding: 8px 12px; border: 1px solid #e1e1e1; }
     
     /* 메시지 행 레이아웃 */
-    .message-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px;}
-    .message-row.assistant { flex-direction: row;}
+    .message-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; width: 100%; flex-shrink: 0; }
+    .message-row.assistant { flex-direction: row; }
 
-    .message-row.user { flex-direction: row-reverse; justify-content: flex-end;}
+    .message-row.user { flex-direction: row-reverse; justify-content: flex-end; }
 
     /* 프로필 이미지 */
     .profile-avatar { width: 60px;height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0;}
@@ -226,8 +244,6 @@
       <button class="new-chat-btn" onclick="startNewTrip()"><span>+</span> 새 여행 계획</button>
       <div class="history-label">최근 여행 기록</div>
       <nav class="chat-history-list">
-        <div class="history-item active">그리스 산토리니 7일 추천</div>
-        <div class="history-item">일본 오사카 3박 4일 일정</div>
       </nav>
     </aside>
 
@@ -468,12 +484,79 @@
       }, 600);
     }
 
+    function addNewChatToSidebar() {
+      const historyList = document.querySelector(".chat-history-list");
+      
+      // 기존의 active 클래스 모두 제거
+      document.querySelectorAll(".history-item").forEach(item => {
+        item.classList.remove("active");
+      });
+    
+      // 새 항목 생성
+      const newItem = document.createElement("div");
+      newItem.className = "history-item active"; // 새 항목을 활성화 상태로
+
+      const textSpan = document.createElement("span");
+      textSpan.className = "item-text";
+      textSpan.textContent = "새로운 여행 계획";
+      textSpan.style.flex = "1";
+      textSpan.style.overflow = "hidden";
+      textSpan.style.textOverflow = "ellipsis";
+      textSpan.style.whiteSpace = "nowrap";
+      
+      // 버튼 그룹 생성
+      const actionsDiv = document.createElement("div");
+      actionsDiv.className = "item-actions";
+  
+      // 수정 버튼 
+      const editBtn = document.createElement("button");
+      editBtn.className = "action-btn";
+      editBtn.innerHTML = "✏️";
+      editBtn.onclick = (e) => {
+        e.stopPropagation(); // 클릭 시 채팅방 전환 방지
+        const newName = prompt("변경할 이름을 입력하세요:", textSpan.textContent);
+        
+        // 취소를 누르지 않았고, 빈 값이 아닐 때만 정확히 textSpan의 내용만 변경
+        if (newName !== null && newName.trim() !== "") {
+          textSpan.textContent = newName;
+        }
+      };
+
+      // 삭제 버튼 
+      const delBtn = document.createElement("button");
+      delBtn.className = "action-btn";
+      delBtn.innerHTML = "🗑️";
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (confirm("이 여행 기록을 삭제하시겠습니까?")) {
+          newItem.remove();
+          // 만약 현재 채팅방을 삭제했다면 채팅창 초기화
+          if (newItem.classList.contains("active")) {
+            document.getElementById("chat-log").innerHTML = "";
+        }
+      }
+    };
+
+      actionsDiv.appendChild(editBtn);
+      actionsDiv.appendChild(delBtn);
+  
+      newItem.appendChild(textSpan);
+      newItem.appendChild(actionsDiv);
+
+      // 리스트의 가장 위에 추가
+      historyList.prepend(newItem);
+    }
+
     // ─────────────────────────────────────────
     // 새 여행 계획 시작 (사이드바 버튼)
     // ─────────────────────────────────────────
     function startNewTrip() {
       // 채팅 초기화
+      document.getElementById("selection-modal").classList.remove("active");
+      document.getElementById("booking-modal").classList.remove("active");
       document.getElementById("chat-log").innerHTML = "";
+
+      // 데이터 및 상태 초기화
       messages = [];
       surveyAnswers = {};
       surveyComplete = false;
@@ -484,17 +567,60 @@
       sessionId = "sess-" + Math.random().toString(36).substring(2, 10);
       localStorage.setItem("travel_session_id", sessionId);
 
+      // 사이드바에 새 항목 추가
+      addNewChatToSidebar();
+
       // 설문 시작
       setTimeout(() => renderSurveyCard(), 300);
     }
 
-    // 채팅 시작 시 설문 표시
+    // 채팅 시작 시 환영 메시지 표시
     window.addEventListener("DOMContentLoaded", () => {
-      setTimeout(() => renderSurveyCard(), 400);
+      showWelcomeMessage();
     });
  
     const DOG_AVATAR = "/static/profile.jpg";
     let loadingMessageId = null;
+
+    function showWelcomeMessage() {
+      const chatLog = document.getElementById("chat-log");
+      
+      chatLog.innerHTML = `
+        <div style="
+          display:flex;
+          flex-direction:column;
+          justify-content:center;
+          align-items:center;
+          flex:1;
+          text-align:center;
+          gap:16px;
+          padding:40px 20px;
+        ">
+          <div style="font-size:56px;">✈️</div>
+          <div style="font-size:22px; font-weight:800; color:#222;">InsighTravel에 오신 걸 환영해요!</div>
+          <div style="font-size:15px; color:#666; line-height:1.7;">
+            나만의 맞춤 여행을 시작해보세요.<br>
+            왼쪽의 <b style="color:#4693f8;">+ 새 여행 계획</b> 버튼을 눌러<br>
+            새로운 여행 계획을 시작해보세요! 🌍
+          </div>
+          <button onclick="startNewTrip()" style="
+            margin-top:8px;
+            padding:12px 28px;
+            background:#80baf8;
+            color:#fff;
+            border:none;
+            border-radius:12px;
+            font-size:15px;
+            font-weight:700;
+            cursor:pointer;
+            box-shadow:0 4px 12px rgba(128,186,248,0.4);
+            transition:background 0.2s;
+          " onmouseover="this.style.background='#4693f8'" onmouseout="this.style.background='#80baf8'">
+            + 새 여행 계획 시작하기
+          </button>
+        </div>
+      `;
+    }
 
     function addMessage(role, text) {
       const chatLog = document.getElementById("chat-log");
