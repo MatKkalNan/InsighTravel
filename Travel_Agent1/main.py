@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -13,8 +13,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # [DB 관련]
-from database import engine, SessionLocal
+from database import engine, SessionLocal, get_db
 from models import Base
+from sqlalchemy.orm import Session
 
 # [LangGraph 앱]
 from graph_app import chat_graph_app
@@ -36,6 +37,7 @@ from memory_service import (
     extract_long_term_memory,
     save_long_term_memories,
 )
+from survey_service import save_survey, get_survey
 
 load_dotenv()
 
@@ -76,8 +78,10 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = None
     context: Optional[str] = ""
     history: Optional[List[Dict[str, str]]] = []
+    survey: Optional[Dict[str, str]] = None
 
 
 class ChatResponse(BaseModel):
@@ -91,6 +95,17 @@ class BookingConfirmRequest(BaseModel):
     booking_type: str
     item_index: int
     passenger_info: Dict[str, Any]
+
+
+class SurveyRequest(BaseModel):
+    session_id: str
+    answers: Dict[str, str]
+
+
+@app.post("/survey")
+async def save_survey_endpoint(req: SurveyRequest):
+    save_survey(session_id=req.session_id, answers=req.answers)
+    return {"status": "ok"}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -113,7 +128,7 @@ async def chat(request: ChatRequest):
             name="Demo User",
         )
         user_id = demo_user.id
-        session_id = DEMO_SESSION_ID
+        session_id = request.session_id or DEMO_SESSION_ID
 
         # 2) preload
         loaded_summary = load_latest_session_summary(
@@ -143,6 +158,20 @@ async def chat(request: ChatRequest):
             message=request.message,
         )
 
+        # 설문 결과를 context 최상단에 강하게 주입
+        # request.survey(프론트 직접 전달) 우선, 없으면 session_id로 저장된 설문 조회
+        survey_answers = request.survey or get_survey(session_id)
+        survey_prefix = ""
+        if survey_answers:
+            survey_prefix = (
+                "[필수 적용 - 사용자 여행 성향 설문결과]\n"
+                f"여행 분위기 선호: {survey_answers.get('atmosphere', '미정')}\n"
+                f"예산 스타일: {survey_answers.get('budget', '미정')}\n"
+                f"여행 우선순위: {survey_answers.get('priority', '미정')}\n"
+                f"일정 스타일: {survey_answers.get('schedule', '미정')}\n"
+                "위 설문 결과를 숙소/항공/식당/일정 추천 시 최우선으로 반드시 반영하세요.\n\n"
+            )
+
         # 5) 날씨 데이터
         today_str = datetime.now().strftime("%Y-%m-%d")
         current_weather = get_insight_weather_data(37.5665, 126.9780, today_str)
@@ -156,7 +185,7 @@ async def chat(request: ChatRequest):
             "user_id": user_id,
             "session_id": session_id,
             "messages": messages,
-            "context": loaded_summary or request.context or "",
+            "context": survey_prefix + (loaded_summary or request.context or ""),
             "short_memory_summary": loaded_summary or "",
             "trip_goal": loaded_trip_goal,
             "trip_profile": loaded_trip_profile,
@@ -167,6 +196,7 @@ async def chat(request: ChatRequest):
             "tool_results": {},
             "replan": {"count": 0},
             "weather_data": current_weather,
+            "survey": survey_answers or None,
         }
 
         # 7) 그래프 실행
@@ -248,11 +278,25 @@ async def get_booking_data(session_id: str, type: str = "hotel"):
 
 
 @app.post("/booking/confirm")
-async def confirm_booking(req: BookingConfirmRequest):
-    booking = booking_store.confirm_booking(
-        req.session_id, req.booking_type, req.item_index, req.passenger_info
+async def confirm_booking(payload: dict, db: Session = Depends(get_db)):
+
+    session_id = payload.get("session_id", "demo-session-1")
+    booking_type = payload.get("booking_type", "flight")
+    item_index = payload.get("item_index", 0)
+    passenger_info = payload.get("passenger_info", {})
+
+    print("[DEBUG] confirm API payload:", payload)
+
+    result = booking_store.confirm_booking(
+        session_id=session_id,
+        booking_type=booking_type,
+        item_index=item_index,
+        passenger_info=passenger_info,
+        db=db  
     )
-    return JSONResponse(booking)
+    print("[DEBUG] DB 전달됨?", db is not None)
+
+    return JSONResponse(result)
 
 
 if __name__ == "__main__":

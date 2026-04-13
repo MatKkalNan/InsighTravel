@@ -9,7 +9,8 @@ import uuid
 import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-
+from sqlalchemy.orm import Session
+from models import BookingHistory
 
 class BookingStore:
     """
@@ -40,8 +41,14 @@ class BookingStore:
         self._temp_data.pop(session_id, None)
 
     # ---- 예약 확인 ----
-    def confirm_booking(self, session_id: str, booking_type: str,
-                        item_index: int, passenger_info: Dict) -> Dict:
+    def confirm_booking(
+        self,
+        session_id: str,
+        booking_type: str,
+        item_index: int,
+        passenger_info: Dict,
+        db: Optional[Session] = None,
+    ) -> Dict:
         """가짜 예약 확인번호 생성 및 기록"""
         items = self.get_temp_data(session_id, booking_type)
         item = items[item_index] if item_index < len(items) else {}
@@ -72,6 +79,10 @@ class BookingStore:
             }
             self._bookings[return_id] = return_booking
 
+            if db:
+                self._save_booking_to_db(db, session_id, booking_type, outbound)
+                self._save_booking_to_db(db, session_id, booking_type, return_booking)
+
             return {
                 "booking_id": outbound_id,
                 "return_booking_id": return_id,
@@ -93,11 +104,63 @@ class BookingStore:
             "created_at": datetime.now().isoformat(),
         }
         self._bookings[booking_id] = booking
+        if db:
+            self._save_booking_to_db(db, session_id, booking_type, booking)
         return booking
 
     def get_booking(self, booking_id: str) -> Optional[Dict]:
         """예약 확인번호로 예약 조회"""
         return self._bookings.get(booking_id)
+    
+    def _save_booking_to_db(
+    self,
+    db: Session,
+    session_id: str,
+    booking_type: str,
+    booking: Dict,
+    ):
+        """
+        인메모리 예약 데이터를 BookingHistory 테이블에도 저장
+        """
+        try:
+            item = booking.get("item", {}) or {}
+            passenger_info = booking.get("passenger_info", {}) or {}
+
+            # 예약 내역 목록에서 보여줄 최소 정보
+            if booking_type == "flight":
+                title = f"{item.get('destination_kr') or item.get('destination') or ''} 항공권"
+                destination = item.get("destination_kr") or item.get("destination") or ""
+                start_date = passenger_info.get("departure_date") or item.get("dep_date")
+                end_date = passenger_info.get("return_date") or item.get("ret_date")
+            else:
+                title = f"{item.get('name') or '숙소'} 예약"
+                destination = item.get("destination_kr") or item.get("destination") or ""
+                start_date = passenger_info.get("checkin") or item.get("checkin")
+                end_date = passenger_info.get("checkout") or item.get("checkout")
+
+            payload = {
+                "item": item,
+                "passenger_info": passenger_info,
+            }
+
+            db_obj = BookingHistory(
+                user_id=None,   # 지금은 데모 단계니까 None으로 둬도 됨
+                session_id=session_id,
+                booking_type=booking_type,
+                booking_code=booking.get("booking_id"),
+                status=booking.get("status", "confirmed"),
+                title=title,
+                destination=destination,
+                start_date=start_date,
+                end_date=end_date,
+                payload_json=json.dumps(payload, ensure_ascii=False),
+            )
+
+            db.add(db_obj)
+            db.commit()
+
+        except Exception as e:
+            print(f"[DB 저장 오류] {e}")
 
 
 # 싱글톤 인스턴스 (서버 전체에서 공유)
