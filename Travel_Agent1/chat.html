@@ -403,7 +403,7 @@
 
       // 선택지 버튼
       const optionsHtml = qData.options.map(opt =>
-        `<button class="survey-option" onclick="selectSurveyOption('${opt.value}')">${opt.label}</button>`
+        `<button class="survey-option" data-value="${opt.value}" onclick="selectSurveyOption('${opt.value}')">${opt.label}</button>`
       ).join("");
 
       card.innerHTML = `
@@ -425,7 +425,7 @@
 
       // 선택 시각 피드백
       document.querySelectorAll(".survey-option").forEach(btn => {
-        btn.classList.toggle("selected", btn.textContent.includes(value.replace(/[^가-힣a-zA-Z]/g, "").slice(0,2)));
+        btn.classList.toggle("selected", btn.dataset.value === value);
       });
 
       setTimeout(() => {

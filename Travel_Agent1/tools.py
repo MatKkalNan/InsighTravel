@@ -119,15 +119,15 @@ def extract_params_with_openai(system_prompt: str, user_message: str, context: s
 # -------------------------------------------------------------------
 # 1. 여행지 아이데이션 (Gemini 창작)
 # -------------------------------------------------------------------
-def run_trip_ideation_tool(user_message: str, context: str) -> str:
-    user_prompt = build_ideation_user_prompt(context, user_message)
+def run_trip_ideation_tool(user_message: str, context: str, survey: dict = None) -> str:
+    user_prompt = build_ideation_user_prompt(context, user_message, survey=survey)
     return call_gemini(IDEATION_SYSTEM, user_prompt, temperature=0.7)
 
 
 # -------------------------------------------------------------------
 # 2. 일정 플래너 (OpenAI 추출 -> 지도 API -> Gemini 작성)
 # -------------------------------------------------------------------
-def run_itinerary_planner_tool(user_message: str, context: str, weather_data=None) -> str:
+def run_itinerary_planner_tool(user_message: str, context: str, weather_data=None, survey: dict = None) -> str:
     print("RUNNING: Itinerary Planner")
     
     # 1. 파라미터 추출
@@ -161,14 +161,14 @@ def run_itinerary_planner_tool(user_message: str, context: str, weather_data=Non
         weather_info_text = f"\n[실시간 날씨 데이터]\n{json.dumps(weather_data, ensure_ascii=False, indent=2)}"
 
     # 4. 최종 프롬프트 구성 및 Gemini 호출
-    user_prompt = build_itinerary_user_prompt(user_message, places_info, weather_info_text)
+    user_prompt = build_itinerary_user_prompt(user_message, places_info, weather_info_text, survey=survey)
     return call_gemini(ITINERARY_SYSTEM, user_prompt, temperature=0.4)
 
 
 # -------------------------------------------------------------------
 # 3. 항공권 검색
 # -------------------------------------------------------------------
-def run_flight_search_tool(user_message: str, context: str) -> str:
+def run_flight_search_tool(user_message: str, context: str, survey: dict = None) -> str:
     print("RUNNING: Flight Search")
 
     param_prompt = build_flight_param_prompt()
@@ -206,13 +206,13 @@ def run_flight_search_tool(user_message: str, context: str) -> str:
     except Exception as e:
         flight_data = f"항공권 검색 중 API 오류가 발생했습니다: {str(e)}"
 
-    return summarize_flight_data(user_message, flight_data)
+    return summarize_flight_data(user_message, flight_data, survey=survey)
 
 
 # -------------------------------------------------------------------
 # 4. 숙소 검색
 # -------------------------------------------------------------------
-def run_stay_search_tool(user_message: str, context: str) -> str:
+def run_stay_search_tool(user_message: str, context: str, survey: dict = None) -> str:
     print("RUNNING: Stay Search")
 
     params = extract_params_with_openai(STAY_PARAM_PROMPT, user_message, context)
@@ -285,14 +285,14 @@ def run_stay_search_tool(user_message: str, context: str) -> str:
     else:
         raw_text = "현재 실시간 검색 결과가 없습니다. 일반적인 숙소 예약 팁을 알려주세요."
 
-    user_prompt = build_stay_user_prompt(user_message, raw_text)
+    user_prompt = build_stay_user_prompt(user_message, raw_text, survey=survey)
     return call_gemini(STAY_SYSTEM, user_prompt)
 
 
 # -------------------------------------------------------------------
 # 5. 맛집/명소 검색
 # -------------------------------------------------------------------
-def run_food_spot_search_tool(user_message: str, context: str) -> str:
+def run_food_spot_search_tool(user_message: str, context: str, survey: dict = None) -> str:
     print("RUNNING: Food/Spot Search")
     
     params = extract_params_with_openai(FOOD_PARAM_PROMPT, user_message, context)
@@ -307,7 +307,7 @@ def run_food_spot_search_tool(user_message: str, context: str) -> str:
         n_results = search_places_naver(query)
         data_text = "[Naver Maps]\n" + "\n".join([f"{p['title']} ({p['category']})" for p in n_results])
 
-    user_prompt = build_food_user_prompt(user_message, data_text)
+    user_prompt = build_food_user_prompt(user_message, data_text, survey=survey)
     return call_gemini(FOOD_SYSTEM, user_prompt)
 
 # -------------------------------------------------------------------
@@ -651,6 +651,7 @@ def run_tools_from_plan(
     context: str,
     weather_data: Optional[dict] = None,
     long_term_memory: Optional[Dict[str, Any]] = None,
+    survey: Optional[Dict[str, str]] = None,
 ) -> str:
     plan = plan or {}
     print("[DEBUG] plan:", plan)
@@ -662,17 +663,17 @@ def run_tools_from_plan(
     print(f"🚀 [Tool Execution] Tool: {tool}")
 
     if tool == "trip_ideation":
-        return run_trip_ideation_tool(user_message, context)
+        return run_trip_ideation_tool(user_message, context, survey=survey)
     elif tool == "itinerary_planner":
-        return run_itinerary_planner_tool(user_message, context, weather_data)
+        return run_itinerary_planner_tool(user_message, context, weather_data, survey=survey)
     elif tool == "flight_search":
-        return run_flight_search_tool(user_message, context)
+        return run_flight_search_tool(user_message, context, survey=survey)
     elif tool == "stay_search":
-        return run_stay_search_tool(user_message, context)
+        return run_stay_search_tool(user_message, context, survey=survey)
     elif tool in ["accommodation_booking", "booking_action"]:
         return run_booking_action_tool(user_message, context)
     elif tool == "food_spot_search":
-        return run_food_spot_search_tool(user_message, context)
+        return run_food_spot_search_tool(user_message, context, survey=survey)
     elif tool == "event_search":
         return run_event_search_tool(user_message, context)
     elif tool == "transportation_search":
