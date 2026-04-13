@@ -73,7 +73,7 @@ app.add_middleware(
 # static 폴더의 절대 경로
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static") #마운트
 
 
 class ChatRequest(BaseModel):
@@ -148,6 +148,7 @@ async def chat(request: ChatRequest):
         messages = list(request.history) if request.history else []
         messages.append({"role": "user", "content": request.message})
 
+        # 4) user message 저장 (conversation history에 저장 + session summary 업데이트을 위해) -> message_id 반환
         user_row = save_conversation_message(
             db=db,
             user_id=user_id,
@@ -296,7 +297,7 @@ async def booking_history_page():
 
 @app.get("/api/bookings")
 def get_bookings(db: Session = Depends(get_db)):
-    session_id = "demo-session-1"  # 🔥 고정
+    session_id = "demo-session-1"  # 실제로는 인증된 사용자 세션에서 session_id를 가져와야 함
 
     rows = db.query(BookingHistory).filter(
         BookingHistory.session_id == session_id
