@@ -68,3 +68,4 @@ class ChatState(TypedDict, total=False):
     replan: Optional[ReplanState]
 
     weather_data: Optional[Dict[str, Any]]
+    survey: Optional[Dict[str, str]]

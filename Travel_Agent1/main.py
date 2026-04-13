@@ -36,6 +36,7 @@ from memory_service import (
     extract_long_term_memory,
     save_long_term_memories,
 )
+from survey_service import save_survey, get_survey
 
 load_dotenv()
 
@@ -76,6 +77,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = None
     context: Optional[str] = ""
     history: Optional[List[Dict[str, str]]] = []
     survey: Optional[Dict[str, str]] = None
@@ -94,18 +96,14 @@ class BookingConfirmRequest(BaseModel):
     passenger_info: Dict[str, Any]
 
 
-# 세션별 설문 결과 인메모리 저장 (세션 유지)
-_survey_store: Dict[str, Dict[str, str]] = {}
-
-
 class SurveyRequest(BaseModel):
     session_id: str
     answers: Dict[str, str]
 
 
 @app.post("/survey")
-async def save_survey(req: SurveyRequest):
-    _survey_store[req.session_id] = req.answers
+async def save_survey_endpoint(req: SurveyRequest):
+    save_survey(session_id=req.session_id, answers=req.answers)
     return {"status": "ok"}
 
 
@@ -129,7 +127,7 @@ async def chat(request: ChatRequest):
             name="Demo User",
         )
         user_id = demo_user.id
-        session_id = DEMO_SESSION_ID
+        session_id = request.session_id or DEMO_SESSION_ID
 
         # 2) preload
         loaded_summary = load_latest_session_summary(
@@ -160,7 +158,8 @@ async def chat(request: ChatRequest):
         )
 
         # 설문 결과를 context 최상단에 강하게 주입
-        survey_answers = request.survey or _survey_store.get(session_id, {})
+        # request.survey(프론트 직접 전달) 우선, 없으면 session_id로 저장된 설문 조회
+        survey_answers = request.survey or get_survey(session_id)
         survey_prefix = ""
         if survey_answers:
             survey_prefix = (
@@ -196,6 +195,7 @@ async def chat(request: ChatRequest):
             "tool_results": {},
             "replan": {"count": 0},
             "weather_data": current_weather,
+            "survey": survey_answers or None,
         }
 
         # 7) 그래프 실행
