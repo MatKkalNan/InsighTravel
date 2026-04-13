@@ -126,3 +126,25 @@ class BookingHistory(Base):
     payload_json = Column(Text, nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class CancelledBookingHistory(Base):
+    __tablename__ = "cancelled_booking_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    session_id = Column(String, nullable=False, index=True)
+
+    booking_type = Column(String, nullable=False)
+    booking_code = Column(String, index=True, nullable=False)
+
+    title = Column(String, nullable=True)
+    destination = Column(String, nullable=True)
+
+    start_date = Column(String, nullable=True)
+    end_date = Column(String, nullable=True)
+
+    payload_json = Column(Text, nullable=False)
+
+    original_created_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), server_default=func.now())
