@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -13,8 +13,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # [DB 관련]
-from database import engine, SessionLocal
+from database import engine, SessionLocal, get_db
 from models import Base
+from sqlalchemy.orm import Session
 
 # [LangGraph 앱]
 from graph_app import chat_graph_app
@@ -277,11 +278,25 @@ async def get_booking_data(session_id: str, type: str = "hotel"):
 
 
 @app.post("/booking/confirm")
-async def confirm_booking(req: BookingConfirmRequest):
-    booking = booking_store.confirm_booking(
-        req.session_id, req.booking_type, req.item_index, req.passenger_info
+async def confirm_booking(payload: dict, db: Session = Depends(get_db)):
+
+    session_id = payload.get("session_id", "demo-session-1")
+    booking_type = payload.get("booking_type", "flight")
+    item_index = payload.get("item_index", 0)
+    passenger_info = payload.get("passenger_info", {})
+
+    print("[DEBUG] confirm API payload:", payload)
+
+    result = booking_store.confirm_booking(
+        session_id=session_id,
+        booking_type=booking_type,
+        item_index=item_index,
+        passenger_info=passenger_info,
+        db=db  
     )
-    return JSONResponse(booking)
+    print("[DEBUG] DB 전달됨?", db is not None)
+
+    return JSONResponse(result)
 
 
 if __name__ == "__main__":

@@ -2,10 +2,9 @@
 from datetime import datetime
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
-from sqlalchemy.orm import declarative_base, relationship
-
-Base = declarative_base()
-
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from database import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -104,3 +103,26 @@ class Trip(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="trips")
+
+class BookingHistory(Base):
+    __tablename__ = "booking_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    session_id = Column(String, nullable=False, index=True)
+
+    booking_type = Column(String, nullable=False)
+    booking_code = Column(String, unique=True, index=True, nullable=False)
+
+    status = Column(String, default="confirmed")
+
+    title = Column(String, nullable=True)
+    destination = Column(String, nullable=True)
+
+    start_date = Column(String, nullable=True)
+    end_date = Column(String, nullable=True)
+
+    payload_json = Column(Text, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
