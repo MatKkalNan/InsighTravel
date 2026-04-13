@@ -70,6 +70,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# static 폴더의 절대 경로
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -120,6 +121,7 @@ async def index():
 async def chat(request: ChatRequest):
     db = SessionLocal()
     try:
+         # 1) demo user 보장
         demo_user = get_or_create_demo_user(
             db=db,
             external_id=DEMO_EXTERNAL_ID,
@@ -127,13 +129,13 @@ async def chat(request: ChatRequest):
         )
         user_id = demo_user.id
         session_id = request.session_id or DEMO_SESSION_ID
-
+         # 2) preload
         loaded_summary = load_latest_session_summary(
             db=db,
             user_id=user_id,
             session_id=session_id,
         )
-
+        # 3) 메시지 구성
         loaded_trip = load_latest_trip(db=db, user_id=user_id)
         loaded_trip_goal, loaded_trip_profile, loaded_constraints = trip_to_state_payload(loaded_trip)
 
@@ -152,7 +154,8 @@ async def chat(request: ChatRequest):
             role="user",
             message=request.message,
         )
-
+        # 설문 결과를 context 최상단에 강하게 주입
+        # request.survey(프론트 직접 전달) 우선, 없으면 session_id로 저장된 설문 조회
         survey_answers = request.survey or get_survey(session_id)
         survey_prefix = ""
         if survey_answers:
@@ -164,14 +167,14 @@ async def chat(request: ChatRequest):
                 f"일정 스타일: {survey_answers.get('schedule', '미정')}\n"
                 "위 설문 결과를 숙소/항공/식당/일정 추천 시 최우선으로 반드시 반영하세요.\n\n"
             )
-
+        # 5) 날씨 데이터
         today_str = datetime.now().strftime("%Y-%m-%d")
         current_weather = get_insight_weather_data(37.5665, 126.9780, today_str)
 
         print(f"--- [DEBUG 1] API 호출 결과: {current_weather is not None} ---")
         if current_weather:
             print(f"--- [DEBUG 2] 데이터 샘플: {str(current_weather)[:100]}... ---")
-
+        # 6) LangGraph 초기 상태
         initial_state: ChatState = {
             "user_id": user_id,
             "session_id": session_id,
@@ -189,11 +192,11 @@ async def chat(request: ChatRequest):
             "weather_data": current_weather,
             "survey": survey_answers or None,
         }
-
+          # 7) 그래프 실행
         result = chat_graph_app.invoke(initial_state)
 
         print(f"DEBUG: 에이전트에게 전달된 날씨 데이터 -> {result.get('weather_data') is not None}")
-
+        # 8) assistant message 저장
         assistant_reply = result.get("tool_output", "처리 중 오류가 발생했습니다.")
         assistant_row = save_conversation_message(
             db=db,
@@ -201,7 +204,7 @@ async def chat(request: ChatRequest):
             role="assistant",
             message=assistant_reply,
         )
-
+        # 9) 최신 summary 저장
         latest_context = result.get("context", "") or ""
         upsert_session_summary(
             db=db,
@@ -209,13 +212,13 @@ async def chat(request: ChatRequest):
             session_id=session_id,
             summary=latest_context,
         )
-
+         # 10) trip 상태 저장
         upsert_trip_from_state(
             db=db,
             user_id=user_id,
             state=result,
         )
-
+        # 11) 장기 기억 추출 및 저장
         memory_payload = extract_long_term_memory(
             user_message=request.message,
             context=latest_context,
