@@ -28,6 +28,24 @@
       padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
       display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px;
     }
+    .booking-history-btn {
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .booking-history-btn:hover {
+      background-color: #f8fafc;
+    }
     .history-label { font-size: 11px; font-weight: 700; color: #555; margin-bottom: 12px; text-transform: uppercase; }
     .chat-history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
     .history-item { padding: 10px 12px; border-radius: 8px; font-size: 14px; color: #4a5568; text-decoration: none; cursor: pointer; }
@@ -242,6 +260,7 @@
     <aside class="sidebar">
       <div class="sidebar-header">✈️InsighTravel</div>
       <button class="new-chat-btn" onclick="startNewTrip()"><span>+</span> 새 여행 계획</button>
+      <button class="booking-history-btn" onclick="openBookingHistory()"><span>📋</span> 예약 내역 보기</button>
       <div class="history-label">최근 여행 기록</div>
       <nav class="chat-history-list">
       </nav>
@@ -881,6 +900,11 @@
 
     document.getElementById("user-input").addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });</script>
+    });
+    
+    function openBookingHistory() {
+      const url = `/booking/history?session_id=${encodeURIComponent(sessionId)}`;
+      window.open(url, "_blank");
+    }</script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 # main.py
 import os
+import json
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -16,6 +17,7 @@ from dotenv import load_dotenv
 from database import engine, SessionLocal, get_db
 from models import Base
 from sqlalchemy.orm import Session
+from models import BookingHistory, CancelledBookingHistory
 
 # [LangGraph 앱]
 from graph_app import chat_graph_app
@@ -68,13 +70,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BASE_DIR = Path(__file__).resolve().parent
-
 # static 폴더의 절대 경로
+BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static") #마운트
 
-# 마운트
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 class ChatRequest(BaseModel):
     message: str
@@ -121,7 +121,7 @@ async def index():
 async def chat(request: ChatRequest):
     db = SessionLocal()
     try:
-        # 1) demo user 보장
+         # 1) demo user 보장
         demo_user = get_or_create_demo_user(
             db=db,
             external_id=DEMO_EXTERNAL_ID,
@@ -129,14 +129,13 @@ async def chat(request: ChatRequest):
         )
         user_id = demo_user.id
         session_id = request.session_id or DEMO_SESSION_ID
-
-        # 2) preload
+         # 2) preload
         loaded_summary = load_latest_session_summary(
             db=db,
             user_id=user_id,
             session_id=session_id,
         )
-
+        # 3) 메시지 구성
         loaded_trip = load_latest_trip(db=db, user_id=user_id)
         loaded_trip_goal, loaded_trip_profile, loaded_constraints = trip_to_state_payload(loaded_trip)
 
@@ -146,18 +145,16 @@ async def chat(request: ChatRequest):
             limit=10,
         )
 
-        # 3) 메시지 구성
         messages = list(request.history) if request.history else []
         messages.append({"role": "user", "content": request.message})
 
-        # 4) user message 저장
+        # 4) user message 저장 (conversation history에 저장 + session summary 업데이트을 위해) -> message_id 반환
         user_row = save_conversation_message(
             db=db,
             user_id=user_id,
             role="user",
             message=request.message,
         )
-
         # 설문 결과를 context 최상단에 강하게 주입
         # request.survey(프론트 직접 전달) 우선, 없으면 session_id로 저장된 설문 조회
         survey_answers = request.survey or get_survey(session_id)
@@ -171,7 +168,6 @@ async def chat(request: ChatRequest):
                 f"일정 스타일: {survey_answers.get('schedule', '미정')}\n"
                 "위 설문 결과를 숙소/항공/식당/일정 추천 시 최우선으로 반드시 반영하세요.\n\n"
             )
-
         # 5) 날씨 데이터
         today_str = datetime.now().strftime("%Y-%m-%d")
         current_weather = get_insight_weather_data(37.5665, 126.9780, today_str)
@@ -179,7 +175,6 @@ async def chat(request: ChatRequest):
         print(f"--- [DEBUG 1] API 호출 결과: {current_weather is not None} ---")
         if current_weather:
             print(f"--- [DEBUG 2] 데이터 샘플: {str(current_weather)[:100]}... ---")
-
         # 6) LangGraph 초기 상태
         initial_state: ChatState = {
             "user_id": user_id,
@@ -198,12 +193,10 @@ async def chat(request: ChatRequest):
             "weather_data": current_weather,
             "survey": survey_answers or None,
         }
-
-        # 7) 그래프 실행
+          # 7) 그래프 실행
         result = chat_graph_app.invoke(initial_state)
 
         print(f"DEBUG: 에이전트에게 전달된 날씨 데이터 -> {result.get('weather_data') is not None}")
-
         # 8) assistant message 저장
         assistant_reply = result.get("tool_output", "처리 중 오류가 발생했습니다.")
         assistant_row = save_conversation_message(
@@ -212,7 +205,6 @@ async def chat(request: ChatRequest):
             role="assistant",
             message=assistant_reply,
         )
-
         # 9) 최신 summary 저장
         latest_context = result.get("context", "") or ""
         upsert_session_summary(
@@ -221,14 +213,12 @@ async def chat(request: ChatRequest):
             session_id=session_id,
             summary=latest_context,
         )
-
-        # 10) trip 상태 저장
+         # 10) trip 상태 저장
         upsert_trip_from_state(
             db=db,
             user_id=user_id,
             state=result,
         )
-
         # 11) 장기 기억 추출 및 저장
         memory_payload = extract_long_term_memory(
             user_message=request.message,
@@ -279,7 +269,6 @@ async def get_booking_data(session_id: str, type: str = "hotel"):
 
 @app.post("/booking/confirm")
 async def confirm_booking(payload: dict, db: Session = Depends(get_db)):
-
     session_id = payload.get("session_id", "demo-session-1")
     booking_type = payload.get("booking_type", "flight")
     item_index = payload.get("item_index", 0)
@@ -292,11 +281,114 @@ async def confirm_booking(payload: dict, db: Session = Depends(get_db)):
         booking_type=booking_type,
         item_index=item_index,
         passenger_info=passenger_info,
-        db=db  
+        db=db,
     )
-    print("[DEBUG] DB 전달됨?", db is not None)
 
+    print("[DEBUG] DB 전달됨?", db is not None)
     return JSONResponse(result)
+
+
+@app.get("/booking/history", response_class=HTMLResponse)
+async def booking_history_page():
+    html_path = os.path.join(os.path.dirname(__file__), "booking_history.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+
+@app.get("/api/bookings")
+def get_bookings(db: Session = Depends(get_db)):
+    session_id = "demo-session-1"  # 실제로는 인증된 사용자 세션에서 session_id를 가져와야 함
+
+    rows = db.query(BookingHistory).filter(
+        BookingHistory.session_id == session_id
+    ).order_by(BookingHistory.created_at.desc()).all()
+
+    return {
+        "items": [
+            {
+                "booking_code": r.booking_code,
+                "type": r.booking_type,
+                "status": r.status,
+                "title": r.title,
+                "destination": r.destination,
+                "start_date": r.start_date,
+                "end_date": r.end_date,
+                "payload": json.loads(r.payload_json or "{}")
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.post("/api/bookings/{booking_code}/cancel")
+def cancel_booking(booking_code: str, db: Session = Depends(get_db)):
+    booking = (
+        db.query(BookingHistory)
+        .filter(BookingHistory.booking_code == booking_code)
+        .first()
+    )
+
+    if not booking:
+        return JSONResponse(
+            status_code=404,
+            content={"ok": False, "message": "예약 내역을 찾을 수 없습니다."}
+        )
+
+    cancelled = CancelledBookingHistory(
+        user_id=booking.user_id,
+        session_id=booking.session_id,
+        booking_type=booking.booking_type,
+        booking_code=booking.booking_code,
+        title=booking.title,
+        destination=booking.destination,
+        start_date=booking.start_date,
+        end_date=booking.end_date,
+        payload_json=booking.payload_json,
+        original_created_at=booking.created_at,
+    )
+
+    db.add(cancelled)
+    db.delete(booking)
+    db.commit()
+
+    return {
+        "ok": True,
+        "message": "예약이 취소되었습니다.",
+        "booking_code": booking_code,
+    }
+
+@app.get("/api/cancelled-bookings")
+def get_cancelled_booking_history(db: Session = Depends(get_db)):
+    session_id = "demo-session-1"
+
+    bookings = (
+        db.query(CancelledBookingHistory)
+        .filter(CancelledBookingHistory.session_id == session_id)
+        .order_by(CancelledBookingHistory.cancelled_at.desc())
+        .all()
+    )
+
+    items = []
+    for b in bookings:
+        try:
+            payload = json.loads(b.payload_json) if b.payload_json else {}
+        except Exception as e:
+            print("[DEBUG] cancelled payload_json parse error:", e)
+            payload = {}
+
+        items.append({
+            "booking_code": b.booking_code,
+            "booking_type": b.booking_type,
+            "status": "cancelled",
+            "title": b.title,
+            "destination": b.destination,
+            "start_date": b.start_date,
+            "end_date": b.end_date,
+            "created_at": b.cancelled_at.isoformat() if b.cancelled_at else None,
+            "payload": payload,
+        })
+
+    return {"items": items}
 
 
 if __name__ == "__main__":
