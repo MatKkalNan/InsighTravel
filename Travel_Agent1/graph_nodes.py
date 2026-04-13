@@ -195,14 +195,15 @@ def tool_node(state: ChatState) -> ChatState:
     context = state.get("context", "") or ""
     weather_data = state.get("weather_data")
     long_term_memory = state.get("long_term_memory")
+    survey = state.get("survey")
 
     try:
-        # tools.py 쪽도 long_term_memory 인자를 받을 수 있게 열어두는 걸 추천
         answer = tools.run_tools_from_plan(
             plan=plan,
             context=context,
             weather_data=weather_data,
             long_term_memory=long_term_memory,
+            survey=survey,
         )
     except TypeError:
         # 아직 tools.py 시그니처를 안 바꿨다면 fallback

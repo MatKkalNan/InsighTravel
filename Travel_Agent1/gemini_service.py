@@ -40,7 +40,7 @@ def call_gemini(system_prompt: str, user_prompt: str, temperature: float = 0.4) 
     except Exception as e:
         return f"❌ Gemini 호출 중 오류 발생: {e}"
 
-def summarize_flight_data(user_query, flight_raw_data):
+def summarize_flight_data(user_query, flight_raw_data, survey: dict = None):
     """
     항공권 데이터 전용 요약 함수
     """
@@ -48,6 +48,6 @@ def summarize_flight_data(user_query, flight_raw_data):
         return flight_raw_data
 
     # 👉 프롬프트 중앙화 적용
-    user_prompt = build_flight_summary_user_prompt(user_query, flight_raw_data)
+    user_prompt = build_flight_summary_user_prompt(user_query, flight_raw_data, survey=survey)
     
     return call_gemini(FLIGHT_SUMMARY_SYSTEM, user_prompt, temperature=0.3)
