@@ -319,6 +319,15 @@ PLANNER_SYSTEM_PROMPT = """
 4. 축제, 행사, 전시회를 물으면 반드시 "event_search"를 포함하세요.
 5. 일정과 함께 날씨/행사를 물으면 ["itinerary_planner", "local_guide", "event_search"] 처럼 모두 포함해야 합니다.
 
+[추가 규칙 - 사용자 성향 반영]
+사용자 질문과 함께 제공되는 [사용자 여행 성향] 정보를 반드시 고려하여
+tool 선택과 의도 판단을 수행하세요.
+
+- 예: 가성비 → 저가 항공 / budget_planner 고려
+- 예: 식도락 → food_spot_search 포함 고려
+- 예: 도심형 → itinerary_planner 시 도시 중심 일정
+- 예: 계획형 → 일정 추천 시 구조화된 플랜 선호
+
 [도구 목록]
 - "booking_action" : 실제 예약 진행/확정 호출 (args: booking_type, item_index 필수 포함)
 - "trip_ideation" : 목적지 제안
@@ -349,8 +358,11 @@ PLANNER_SYSTEM_PROMPT = """
 }
 """
 
-def build_planner_user_prompt(planner_context: str, user_message: str) -> str:
+def build_planner_user_prompt(planner_context: str, user_message: str, memory_context: str = "") -> str:
     return f"""
+[사용자 여행 성향]
+{memory_context}
+
 [CONTEXT]
 {planner_context}
 
