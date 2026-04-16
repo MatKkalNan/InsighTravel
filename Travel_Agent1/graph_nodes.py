@@ -117,7 +117,6 @@ def planner_node(state: ChatState) -> ChatState:
     # 데모 단계에서는 아주 짧게만 넣어도 됨.
     long_term_memory = state.get("long_term_memory") or {}
 
-    # 🔥 추가 (핵심)
     memory_context = state.get("memory_context", "")
 
     combined_context = f"""
