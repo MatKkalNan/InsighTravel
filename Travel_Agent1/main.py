@@ -19,6 +19,7 @@ from models import Base
 from sqlalchemy.orm import Session
 from models import BookingHistory, CancelledBookingHistory
 
+
 # [LangGraph 앱]
 from graph_app import chat_graph_app
 from graph_state import ChatState
@@ -38,6 +39,7 @@ from memory_service import (
     load_all_long_term_memories,
     extract_long_term_memory,
     save_long_term_memories,
+    save_survey_long_term_memories,
 )
 from survey_service import save_survey, get_survey
 
@@ -103,9 +105,25 @@ class SurveyRequest(BaseModel):
 
 
 @app.post("/survey")
-async def save_survey_endpoint(req: SurveyRequest):
+async def save_survey_endpoint(req: SurveyRequest, db: Session = Depends(get_db)):
     save_survey(session_id=req.session_id, answers=req.answers)
-    return {"status": "ok"}
+
+    demo_user = get_or_create_demo_user(
+        db=db,
+        external_id=DEMO_EXTERNAL_ID,
+        name="Demo User",
+    )
+
+    saved_count = save_survey_long_term_memories(
+        db=db,
+        user_id=demo_user.id,
+        source_message_id=None,
+        answers=req.answers,
+    )
+
+    print(f"✅ saved survey memories: {saved_count}")
+
+    return {"status": "ok", "saved_memories": saved_count}
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -208,6 +208,85 @@ def extract_long_term_memory(
         print(f"⚠️ memory extraction error: {e}")
         return {"should_store": False, "memories": []}
 
+# ---------------------------------------------
+# Survey Memory Builder
+# ---------------------------------------------
+
+def build_survey_memory_payload(answers: Dict[str, str]) -> Dict[str, Any]:
+    if not answers:
+        return {"should_store": False, "memories": []}
+
+    memories: List[Dict[str, Any]] = []
+
+    atmosphere = (answers.get("atmosphere") or "").strip()
+    budget = (answers.get("budget") or "").strip()
+    priority = (answers.get("priority") or "").strip()
+    schedule = (answers.get("schedule") or "").strip()
+
+    if atmosphere:
+        memories.append({
+            "memory_type": "travel_style",
+            "content": f"{atmosphere} 여행 분위기를 선호함",
+            "importance": 5,
+        })
+        memories.append({
+            "memory_type": "destination_preference",
+            "content": f"{atmosphere} 목적지를 선호함",
+            "importance": 4,
+        })
+
+    if budget:
+        memories.append({
+            "memory_type": "budget_preference",
+            "content": f"{budget} 예산 스타일을 선호함",
+            "importance": 5,
+        })
+
+    if priority:
+        memories.append({
+            "memory_type": "travel_style",
+            "content": f"여행에서 {priority}을(를) 중요하게 생각함",
+            "importance": 4,
+        })
+
+    if schedule:
+        memories.append({
+            "memory_type": "travel_style",
+            "content": f"{schedule} 일정 운영 방식을 선호함",
+            "importance": 4,
+        })
+
+    return {
+        "should_store": True,
+        "memories": memories,
+    }
+
+
+def save_survey_long_term_memories(
+    db: Session,
+    user_id: int,
+    source_message_id: Optional[int],
+    answers: Dict[str, str],
+) -> int:
+    payload = build_survey_memory_payload(answers)
+
+    if not payload.get("should_store"):
+        return 0
+
+    count = 0
+    for m in payload["memories"]:
+        db_obj = UserMemory(
+            user_id=user_id,
+            memory_type=m["memory_type"],
+            content=m["content"],
+            importance=m.get("importance", 3),
+            source_message_id=source_message_id,
+        )
+        db.add(db_obj)
+        count += 1
+
+    db.commit()
+    return count
 
 # ---------------------------------------------
 # Save
@@ -338,3 +417,4 @@ def format_long_term_memory_for_prompt(memory_payload: Dict[str, Any]) -> str:
     for mem in memories[:5]:
         lines.append(f"- {mem['content']}")
     return "\n".join(lines)
+
