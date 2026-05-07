@@ -321,21 +321,27 @@ def get_bookings(db: Session = Depends(get_db)):
         BookingHistory.session_id == session_id
     ).order_by(BookingHistory.created_at.desc()).all()
 
-    return {
-        "items": [
-            {
-                "booking_code": r.booking_code,
-                "type": r.booking_type,
-                "status": r.status,
-                "title": r.title,
-                "destination": r.destination,
-                "start_date": r.start_date,
-                "end_date": r.end_date,
-                "payload": json.loads(r.payload_json or "{}")
-            }
-            for r in rows
-        ]
-    }
+    items = []
+    for r in rows:
+        try:
+            payload = json.loads(r.payload_json) if r.payload_json else {}
+        except Exception as e:
+            print("[DEBUG] booking payload_json parse error:", e)
+            payload = {}
+
+        items.append({
+            "booking_code": r.booking_code,
+            "booking_type": r.booking_type,
+            "status": r.status,
+            "title": r.title,
+            "destination": r.destination,
+            "start_date": r.start_date,
+            "end_date": r.end_date,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "payload": payload,
+        })
+
+    return {"items": items}
 
 
 @app.post("/api/bookings/{booking_code}/cancel")

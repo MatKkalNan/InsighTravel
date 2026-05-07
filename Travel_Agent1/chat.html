@@ -337,7 +337,7 @@
 
   <script>
     // 세션 ID 생성 (브라우저별 1개 유지)
-    let sessionId = localStorage.getItem("travel_session_id") || "sess-" + Math.random().toString(36).substring(2, 10);
+    let sessionId = "demo-session-1";
     localStorage.setItem("travel_session_id", sessionId);
 
     // 최근 대화를 서버로 넘기기 위한 메모리
@@ -583,7 +583,7 @@
       currentQ = 0;
 
       // 새 세션 ID 생성
-      sessionId = "sess-" + Math.random().toString(36).substring(2, 10);
+      sessionId = "demo-session-1";
       localStorage.setItem("travel_session_id", sessionId);
 
       // 사이드바에 새 항목 추가

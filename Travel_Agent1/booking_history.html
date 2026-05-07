@@ -406,38 +406,7 @@
       document.getElementById('status').textContent = text;
     }
 
- async function loadBookings() {
-  const sessionId = "demo-session-1";  // 🔥 그냥 고정
 
-  setStatus('예약 내역을 불러오는 중...');
-  selectedIndex = -1;
-
-  try {
-    const res = await fetch(`/api/bookings?session_id=${sessionId}`);
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-    bookings = data.items || [];
-
-    renderHistoryList();
-
-    if (bookings.length > 0) {
-      selectedIndex = 0;
-      renderHistoryList();
-      renderDetail(bookings[0]);
-      setStatus(`총 ${bookings.length}개의 예약 내역`);
-    } else {
-      document.getElementById('detail-view').innerHTML = `<div class="empty">표시할 예약 상세가 없습니다.</div>`;
-      setStatus('예약 내역 없음');
-    }
-
-  } catch (e) {
-    console.error(e);
-    setStatus(`불러오기 실패 (${e.message})`);
-  }
-}
   async function loadActiveBookings() {
   setStatus('예약 내역을 불러오는 중...');
   selectedIndex = -1;
