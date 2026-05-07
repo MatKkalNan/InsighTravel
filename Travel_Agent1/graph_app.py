@@ -30,12 +30,14 @@ def build_chat_graph():
     workflow.add_edge("context_node", "goal_node")
     
     # 목표 추출 -> 플래너
-    workflow.add_edge("goal_node", "planner_node")
+    workflow.add_edge("goal_node", "memory_gate_node")
     
-    # 플래너 -> 도구 실행
-    workflow.add_edge("planner_node", "memory_gate_node")
+    workflow.add_edge("memory_gate_node", "planner_node")
 
-    workflow.add_edge("memory_gate_node", "tool_node")
+    # 플래너 -> 도구 실행
+    workflow.add_edge("planner_node", "tool_node")
+
+    
     
     # 도구 실행 -> 종료
     workflow.add_edge("tool_node", END)

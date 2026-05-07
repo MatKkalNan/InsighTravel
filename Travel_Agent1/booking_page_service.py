@@ -49,51 +49,10 @@ class BookingStore:
         passenger_info: Dict,
         db: Optional[Session] = None,
     ) -> Dict:
-        """가짜 예약 확인번호 생성 및 기록"""
         items = self.get_temp_data(session_id, booking_type)
         item = items[item_index] if item_index < len(items) else {}
 
-        # 왕복 항공권인 경우 출국편 + 귀국편 두 개의 예약을 생성
-        if booking_type == "flight" and passenger_info.get("is_roundtrip"):
-            now = datetime.now().isoformat()
-
-            outbound_id = f"BK-{uuid.uuid4().hex[:8].upper()}"
-            outbound = {
-                "booking_id": outbound_id,
-                "type": booking_type,
-                "item": item,
-                "passenger_info": passenger_info,
-                "status": "confirmed",
-                "created_at": now,
-            }
-            self._bookings[outbound_id] = outbound
-
-            return_id = f"BK-{uuid.uuid4().hex[:8].upper()}"
-            return_booking = {
-                "booking_id": return_id,
-                "type": booking_type,
-                "item": item,
-                "passenger_info": passenger_info,
-                "status": "confirmed",
-                "created_at": now,
-            }
-            self._bookings[return_id] = return_booking
-
-            if db:
-                self._save_booking_to_db(db, session_id, booking_type, outbound)
-                self._save_booking_to_db(db, session_id, booking_type, return_booking)
-
-            return {
-                "booking_id": outbound_id,
-                "return_booking_id": return_id,
-                "type": booking_type,
-                "item": item,
-                "passenger_info": passenger_info,
-                "status": "confirmed",
-                "created_at": now,
-            }
-
-        # 편도 / 호텔 (기존과 동일)
+        """가짜 예약 확인번호 생성 및 기록"""
         booking_id = f"BK-{uuid.uuid4().hex[:8].upper()}"
         booking = {
             "booking_id": booking_id,
@@ -103,9 +62,12 @@ class BookingStore:
             "status": "confirmed",
             "created_at": datetime.now().isoformat(),
         }
+
         self._bookings[booking_id] = booking
+
         if db:
             self._save_booking_to_db(db, session_id, booking_type, booking)
+
         return booking
 
     def get_booking(self, booking_id: str) -> Optional[Dict]:
@@ -128,8 +90,9 @@ class BookingStore:
 
             # 예약 내역 목록에서 보여줄 최소 정보
             if booking_type == "flight":
-                title = f"{item.get('destination_kr') or item.get('destination') or ''} 항공권"
+                origin = item.get("origin") or "ICN"
                 destination = item.get("destination_kr") or item.get("destination") or ""
+                title = f"{origin}-{destination} 왕복 항공권"
                 start_date = passenger_info.get("departure_date") or item.get("dep_date")
                 end_date = passenger_info.get("return_date") or item.get("ret_date")
             else:

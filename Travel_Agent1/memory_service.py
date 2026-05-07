@@ -270,23 +270,12 @@ def save_survey_long_term_memories(
 ) -> int:
     payload = build_survey_memory_payload(answers)
 
-    if not payload.get("should_store"):
-        return 0
-
-    count = 0
-    for m in payload["memories"]:
-        db_obj = UserMemory(
-            user_id=user_id,
-            memory_type=m["memory_type"],
-            content=m["content"],
-            importance=m.get("importance", 3),
-            source_message_id=source_message_id,
-        )
-        db.add(db_obj)
-        count += 1
-
-    db.commit()
-    return count
+    return save_long_term_memories(
+        db=db,
+        user_id=user_id,
+        source_message_id=source_message_id,
+        memory_payload=payload,
+    )
 
 # ---------------------------------------------
 # Save
