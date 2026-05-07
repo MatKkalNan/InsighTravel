@@ -52,6 +52,7 @@ class BookingStore:
         items = self.get_temp_data(session_id, booking_type)
         item = items[item_index] if item_index < len(items) else {}
 
+        """가짜 예약 확인번호 생성 및 기록"""
         booking_id = f"BK-{uuid.uuid4().hex[:8].upper()}"
         booking = {
             "booking_id": booking_id,
