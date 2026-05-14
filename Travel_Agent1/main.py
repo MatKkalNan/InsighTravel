@@ -43,6 +43,8 @@ from memory_service import (
 )
 from survey_service import save_survey, get_survey
 
+MAX_SESSION_SUMMARY_CHARS = 3000 #context summary length limit for DB 저장 (추후 더 정교하게 관리 필요 - 예: 토큰 수 기반으로)
+
 load_dotenv()
 
 ENABLE_DB_INIT = os.getenv("ENABLE_DB_INIT", "1") == "1"
@@ -199,6 +201,9 @@ async def chat(request: ChatRequest):
             "session_id": session_id,
             "messages": messages,
             "context": survey_prefix + (loaded_summary or request.context or ""),
+            "memory_context": "",
+            "relevant_long_term_memory":[],
+            "memory_gate": {},
             "short_memory_summary": loaded_summary or "",
             "trip_goal": loaded_trip_goal,
             "trip_profile": loaded_trip_profile,
@@ -225,6 +230,9 @@ async def chat(request: ChatRequest):
         )
         # 9) 최신 summary 저장
         latest_context = result.get("context", "") or ""
+
+        if len(latest_context) > MAX_SESSION_SUMMARY_CHARS:
+            latest_context = latest_context[-MAX_SESSION_SUMMARY_CHARS:]
         upsert_session_summary(
             db=db,
             user_id=user_id,

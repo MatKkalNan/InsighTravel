@@ -50,9 +50,20 @@ class BookingStore:
         db: Optional[Session] = None,
     ) -> Dict:
         items = self.get_temp_data(session_id, booking_type)
-        item = items[item_index] if item_index < len(items) else {}
+        if not items:
+            return {
+                "ok": False,
+                "message": "예약 가능한 항목을 찾을 수 없습니다.",
+            }
 
-        """가짜 예약 확인번호 생성 및 기록"""
+        if item_index < 0 or item_index >= len(items):
+            return {
+                "ok": False,
+                "message": "선택한 예약 항목을 찾을 수 없습니다.",
+            }
+
+        item = items[item_index]
+
         booking_id = f"BK-{uuid.uuid4().hex[:8].upper()}"
         booking = {
             "booking_id": booking_id,
@@ -91,27 +102,47 @@ class BookingStore:
             # 예약 내역 목록에서 보여줄 최소 정보
             if booking_type == "flight":
                 origin = item.get("origin") or "ICN"
-                destination = item.get("destination_kr") or item.get("destination") or ""
+                destination = (
+                    item.get("destination_kr")
+                    or item.get("destination_name")
+                    or item.get("destination")
+                    or ""
+                )
                 title = f"{origin}-{destination} 왕복 항공권"
                 start_date = passenger_info.get("departure_date") or item.get("dep_date")
                 end_date = passenger_info.get("return_date") or item.get("ret_date")
-            else:
+            elif booking_type == "hotel":
                 title = f"{item.get('name') or '숙소'} 예약"
                 destination = item.get("destination_kr") or item.get("destination") or ""
                 start_date = passenger_info.get("checkin") or item.get("checkin")
                 end_date = passenger_info.get("checkout") or item.get("checkout")
-
+            else:
+                raise ValueError(f"알 수 없는 예약 유형: {booking_type}")
+            
             payload = {
                 "item": item,
                 "passenger_info": passenger_info,
-            }
+                "created_at": booking.get("created_at"),
+                "booking_summary": {
+                    "booking_type": booking_type,
+                    "title": title,
+                    "destination": destination,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "price": item.get("price"),
+                }
+}
+            status = (booking.get("status") or "confirmed").lower()
 
+            if status not in ["confirmed", "cancelled", "pending"]:
+                status = "confirmed"
+                
             db_obj = BookingHistory(
                 user_id=None,   # 지금은 데모 단계니까 None으로 둬도 됨
                 session_id=session_id,
                 booking_type=booking_type,
                 booking_code=booking.get("booking_id"),
-                status=booking.get("status", "confirmed"),
+                status=status,
                 title=title,
                 destination=destination,
                 start_date=start_date,
@@ -123,6 +154,7 @@ class BookingStore:
             db.commit()
 
         except Exception as e:
+            db.rollback()
             print(f"[DB 저장 오류] {e}")
 
 

@@ -19,6 +19,9 @@ def _call_planner_llm(planner_context: str, user_message: str, memory_context: s
     # 👉 프롬프트 빌더 함수 사용
     user_prompt = build_planner_user_prompt(planner_context, user_message, memory_context)
 
+    print("[DEBUG] planner user_prompt preview:")
+    print(user_prompt[:1000])
+    
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[

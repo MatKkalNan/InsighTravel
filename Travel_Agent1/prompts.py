@@ -198,20 +198,30 @@ STAY_PARAM_PROMPT = f"""
 JSON: {{"destination": "Seoul", "check_in": "{_YEAR}-05-01", "check_out": "{_YEAR}-05-05", "guests": 2}}
 """
 
-STAY_SYSTEM = "호텔 컨시어지로서 최적의 숙소를 추천합니다."
+# 시스템 역할 정의 수정
+STAY_SYSTEM = "사용자의 취향을 반영하여 가장 적합한 숙소 리스트를 상세히 안내하는 호텔 컨시어지입니다."
 
 def build_stay_user_prompt(user_message: str, raw_text: str, survey: dict = None) -> str:
-    persona_rule = get_survey_persona_rule(survey)
+    persona_rule = get_survey_persona_rule(survey) # 사전 설문 규칙 반영
     return f"""사용자 요청: {user_message}
 [통합 숙소 데이터]
 {raw_text}
 
 {persona_rule}
 
-[필수 지침]
-위 데이터 중 가장 추천할 만한 상위 3곳의 숙소를 골라 이름, 가격, 평점을 안내해 주세요. (1개만 안내하지 말고 반드시 3곳을 선정할 것)
+[필수 지침 - 출력 형식 엄격 준수]
+1. 위 데이터 중에서 사용자의 성향에 가장 부합하는 숙소를 **최소 7개에서 최대 8개** 선정하여 목록으로 만드세요.
+2. 반드시 아래의 형식을 한 줄도 빠짐없이 유지하여 답변하세요. (특수문자 및 볼드체 사용 금지)
+   형식: n. 숙소명 / 가격: 가격정보 / 평점: 점수 / 위치: 상세주소 또는 지역
+3. **[중요] 가격 계산 금지 및 단위만 변경**: 
+   - 제공된 데이터의 가격 수치(숫자)는 **절대 임의로 계산하거나 환율을 적용하여 환산하지 마세요.**
+   - 숫자는 그대로 유지하되, 뒤에 붙은 '원'이나 'KRW' 등의 글자만 목적지 국가의 **현지 통화 단위(예: 일본은 JPY, 두바이는 AED, 유럽은 EUR 등)**로 교체하여 출력하세요.
+   - 예시: 제공된 데이터가 '668원'이라면 수학적 계산 없이 그대로 '668 AED'로 표기하세요.
+4. 인사말이나 추가 설명 없이 오직 리스트 정보만 간결하게 출력하세요.
+
 {get_strict_output_rule()}
 """
+
 
 # 1-5. 맛집/명소 검색
 FOOD_PARAM_PROMPT = """

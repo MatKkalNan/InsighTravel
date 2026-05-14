@@ -60,6 +60,7 @@ def load_latest_session_summary(
             SessionMemory.user_id == user_id,
             SessionMemory.session_id == session_id.strip(),
         )
+        .order_by(SessionMemory.updated_at.desc())
         .first()
     )
 

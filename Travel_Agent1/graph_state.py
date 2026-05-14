@@ -69,3 +69,7 @@ class ChatState(TypedDict, total=False):
 
     weather_data: Optional[Dict[str, Any]]
     survey: Optional[Dict[str, str]]
+
+    memory_context: Optional[str]
+    relevant_long_term_memory: Optional[List[Dict[str, Any]]]
+    memory_gate: Optional[Dict[str, Any]]
