@@ -8,8 +8,8 @@ def save_conversation_message(
     role: str,
     message: str,
 ) -> Conversation:
-    if role not in {"user", "assistant"}:
-        raise ValueError(f"Invalid role: {role}")
+    if role not in {"user", "assistant", "system"}:
+        role = "user"
 
     if not message or not message.strip():
         raise ValueError("message must not be empty")

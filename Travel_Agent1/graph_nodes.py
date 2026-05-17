@@ -1,7 +1,6 @@
 # graph_nodes.py
 import os
 import json
-from pyexpat.errors import messages
 from typing import Dict, Any
 
 from dotenv import load_dotenv
@@ -12,6 +11,7 @@ import planner
 import tools
 from goal_service import extract_trip_goal_from_text
 from prompts import build_context_summary_prompt
+from trip_service import sync_trip_profile_from_goal
 
 load_dotenv()
 
@@ -80,6 +80,8 @@ def goal_node(state: ChatState) -> ChatState:
             previous_goal=prev_goal,
         )
         state["trip_goal"] = new_goal
+        state = sync_trip_profile_from_goal(state)
+        print("[DEBUG] goal_node trip_goal:", state.get("trip_goal"))
     except Exception as e:
         print(f"⚠️ goal_node extraction error: {e}")
         if prev_goal is not None:
@@ -94,7 +96,7 @@ def goal_node(state: ChatState) -> ChatState:
                 "style_tags": [],
                 "status": "just_started",
             }
-
+        state = sync_trip_profile_from_goal(state)
     return state
 
 
@@ -135,6 +137,9 @@ def planner_node(state: ChatState) -> ChatState:
 [장기 기억(참고용)]
 {json.dumps(long_term_memory, ensure_ascii=False)}
 """.strip()
+   
+
+    print("[DEBUG] planner_node memory_context:", memory_context)
 
     try:
         plan = planner.plan_tasks(combined_context, latest_user_msg, memory_context)
@@ -170,22 +175,54 @@ def memory_gate_node(state):
     if not messages:
      return state
 
-    user_message = messages[-1].get("content", "")
-    memories = (state.get("long_term_memory") or {}).get("memories", [])
+    latest_msg = messages[-1]
+    user_message = messages[-1].get("content", "") if isinstance(latest_msg, dict) else getattr(latest_msg, "content", "")
+
+    long_term_memory = state.get("long_term_memory") or {}
+    memories = long_term_memory.get("memories", [])
 
     selected_types = []
 
-    if any(k in user_message for k in ["추천", "여행지", "도시"]):
-        selected_types = ["destination_preference", "travel_style", "budget_preference"]
+    
 
-    elif any(k in user_message for k in ["숙소", "호텔"]):
-        selected_types = ["budget_preference", "travel_style"]
+    if any(k in user_message for k in ["숙소", "호텔", "리조트", "에어비앤비"]):
+        selected_types = [
+            "stay_preference",
+            "budget_preference", 
+            "travel_style",
+        ]
 
-    elif any(k in user_message for k in ["일정", "코스"]):
-        selected_types = ["travel_style"]
+    elif any(k in user_message for k in ["일정", "코스", "동선", "루트"]):
+        selected_types = [
+            "travel_style",
+            "schedule_preference",
+            "destination_preference",
+        ]
 
-    elif any(k in user_message for k in ["항공", "항공권"]):
-        selected_types = ["budget_preference"]
+    elif any(k in user_message for k in ["항공", "항공권", " 비행기", "티켓"]):
+        selected_types = [
+            "flight_preference",
+            "budget_preference",
+            "destination_preference",
+        ]
+
+    elif any(k in user_message for k in ["맛집", "카페", "음식", "식당", "먹거리"]):
+        selected_types = [
+            "travel_style",
+            "budget_preference",
+        ]
+
+    elif any(k in user_message for k in ["예산", "비용", "경비", "가성비"]):
+        selected_types = [
+            "budget_preference",
+            "travel_style",
+        ]
+    elif any(k in user_message for k in ["추천", "여행지", "도시", "어디"]):
+        selected_types = [
+            "destination_preference", 
+            "travel_style", 
+            "budget_preference",
+        ]
 
     else:
         selected_types = []
@@ -195,19 +232,23 @@ def memory_gate_node(state):
         if m.get("memory_type") in selected_types
     ]
 
-    memory_context = ""
+    
     if filtered:
-        memory_context = "[사용자 여행 성향]\n" + "\n".join(
-            f"- {m['content']}" for m in filtered
+        memory_context = "[사용자 장기 선호]\n" + "\n".join(
+            f"- {m['content']}" for m in filtered[:5]
         )
+    else:
+        memory_context = ""
 
-    state["memory_context"] = memory_context
     state["relevant_long_term_memory"] = filtered
+    state["memory_context"] = memory_context
     state["memory_gate"] = {
-        "use_memory": len(filtered) > 0,
-        "types": selected_types,
+        "use_memory": bool(filtered),
+        "selected_memory_types": selected_types,
     }
 
+    print("[DEBUG] memory_gate_node - selected_types:", selected_types)
+    print("[DEBUG] memory_context:\n", memory_context)
     return state
 
 

@@ -34,6 +34,7 @@ ALLOWED_MEMORY_TYPES = {
     "flight_preference",
     "stay_preference",
     "destination_preference",
+    "schedule_preference",
 }
 
 TOOL_MEMORY_TYPES = {
@@ -98,6 +99,7 @@ MEMORY_EXTRACTION_SYSTEM = """
 - flight_preference
 - stay_preference
 - destination_preference
+- schedule_preference
 
 규칙:
 1. 저장 가치가 없으면 should_store=false, memories=[]를 반환한다.
@@ -251,7 +253,7 @@ def build_survey_memory_payload(answers: Dict[str, str]) -> Dict[str, Any]:
 
     if schedule:
         memories.append({
-            "memory_type": "travel_style",
+            "memory_type": "schedule_preference",
             "content": f"{schedule} 일정 운영 방식을 선호함",
             "importance": 4,
         })
