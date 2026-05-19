@@ -12,13 +12,16 @@ from prompts import PLANNER_SYSTEM_PROMPT, build_planner_user_prompt
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def _call_planner_llm(planner_context: str, user_message: str) -> str:
+def _call_planner_llm(planner_context: str, user_message: str, memory_context: str = "") -> str:
     """
     LLM을 한 번 호출해서 JSON 문자열(또는 JSON처럼 생긴 텍스트)을 받아온다.
     """
     # 👉 프롬프트 빌더 함수 사용
-    user_prompt = build_planner_user_prompt(planner_context, user_message)
+    user_prompt = build_planner_user_prompt(planner_context, user_message, memory_context)
 
+    print("[DEBUG] planner user_prompt preview:")
+    print(user_prompt[:1000])
+    
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -29,7 +32,7 @@ def _call_planner_llm(planner_context: str, user_message: str) -> str:
     )
     return (resp.choices[0].message.content or "").strip()
 
-def plan_tasks(planner_context: str, user_message: str) -> Dict[str, Any]:
+def plan_tasks(planner_context: str, user_message: str, memory_context: str = "") -> Dict[str, Any]:
     """
     메인 플래너 함수.
     """
@@ -51,7 +54,7 @@ def plan_tasks(planner_context: str, user_message: str) -> Dict[str, Any]:
         }
 
     # 2) LLM에게 맡겨서 plan JSON 생성
-    raw = _call_planner_llm(planner_context, user_message)
+    raw = _call_planner_llm(planner_context, user_message, memory_context)
 
     # 3) JSON 파싱 시도
     try:

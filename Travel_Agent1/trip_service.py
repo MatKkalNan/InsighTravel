@@ -111,3 +111,35 @@ def _safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return default
+    
+def sync_trip_profile_from_goal(state: dict) -> dict:
+    trip_goal = state.get("trip_goal") or {}
+    trip_profile = state.get("trip_profile") or {}
+
+    # destination은 최신 goal이 있으면 반드시 반영
+    if trip_goal.get("destination"):
+        trip_profile["destination"] = trip_goal.get("destination")
+
+    # 날짜/박수/일수
+    if trip_goal.get("start_date"):
+        trip_profile["start_date"] = trip_goal.get("start_date")
+
+    if trip_goal.get("end_date"):
+        trip_profile["end_date"] = trip_goal.get("end_date")
+
+    if trip_goal.get("nights") is not None:
+        trip_profile["nights"] = trip_goal.get("nights")
+
+    if trip_goal.get("days") is not None:
+        trip_profile["days"] = trip_goal.get("days")
+
+    # 인원
+    if trip_goal.get("travelers") is not None:
+        trip_profile["travelers"] = trip_goal.get("travelers")
+
+    # 출발지
+    if trip_goal.get("departure_city"):
+        trip_profile["departure_city"] = trip_goal.get("departure_city")
+
+    state["trip_profile"] = trip_profile
+    return state

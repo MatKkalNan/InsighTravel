@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InsighTravel - 예약 내역</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: #f7f8fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+
+    .header {
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 800;
+      color: #1a73e8;
+    }
+
+    .logo span {
+      color: #f59e0b;
+    }
+
+    .status {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 18px;
+      margin-top: 24px;
+    }
+
+    .panel {
+      background: white;
+      border: 1px solid #e6e9f0;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.05);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid #eef1f5;
+      font-size: 15px;
+      font-weight: 700;
+      background: #fbfcfe;
+    }
+
+    .history-list {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .history-card {
+      border: 1.5px solid #e5e8ef;
+      border-radius: 14px;
+      padding: 14px;
+      cursor: pointer;
+      transition: .2s ease;
+      background: #fff;
+    }
+
+    .history-card:hover {
+      border-color: #1a73e8;
+      box-shadow: 0 4px 12px rgba(26,115,232,.10);
+      transform: translateY(-1px);
+    }
+
+    .history-card.active {
+      border-color: #1a73e8;
+      background: #f3f8ff;
+    }
+
+    .history-card.cancelled {
+      opacity: 0.72;
+      background: #fafafa;
+    }
+
+    .history-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .history-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #222;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .badge.flight {
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
+
+    .badge.hotel {
+      background: #fff4e5;
+      color: #c77700;
+    }
+
+    .badge.status-confirmed {
+      background: #e6f4ea;
+      color: #1e8e3e;
+    }
+
+    .badge.status-cancelled {
+      background: #fdecec;
+      color: #d93025;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .cancel-btn {
+      padding: 11px 16px;
+      border: none;
+      border-radius: 10px;
+      background: #d93025;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .cancel-btn:hover {
+      background: #b42318;
+    }
+
+    .cancel-btn:disabled {
+      background: #d9dce3;
+      cursor: not-allowed;
+    }
+
+    .secondary-btn {
+      padding: 11px 16px;
+      border: 1px solid #d8dce5;
+      border-radius: 10px;
+      background: white;
+      color: #333;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .history-meta {
+      font-size: 12px;
+      color: #777;
+      line-height: 1.8;
+    }
+
+    .detail-wrap {
+      padding: 18px;
+    }
+
+    .empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: #888;
+      font-size: 14px;
+    }
+
+    .detail-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      color: #1a1a2e;
+    }
+
+    .detail-sub {
+      font-size: 13px;
+      color: #777;
+      margin-bottom: 18px;
+    }
+
+    .code-box {
+      display: inline-block;
+      background: #e8f0fe;
+      color: #1a73e8;
+      font-weight: 800;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-family: monospace;
+      font-size: 18px;
+      margin-bottom: 18px;
+    }
+
+    .section {
+      margin-bottom: 18px;
+      padding: 16px;
+      border: 1px solid #edf0f5;
+      border-radius: 14px;
+      background: #fff;
+    }
+
+    .section h3 {
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      color: #333;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      row-gap: 10px;
+      column-gap: 12px;
+      font-size: 14px;
+    }
+
+    .detail-label {
+      color: #888;
+      font-weight: 600;
+    }
+
+    .detail-value {
+      color: #222;
+      font-weight: 500;
+      word-break: break-word;
+    }
+
+    .route-box {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid #edf1f5;
+      margin-bottom: 10px;
+    }
+
+    .route-col {
+      flex: 1;
+    }
+
+    .route-time {
+      font-size: 18px;
+      font-weight: 800;
+      color: #1a1a2e;
+    }
+
+    .route-airport {
+      font-size: 13px;
+      color: #777;
+      margin-top: 4px;
+    }
+
+    .route-center {
+      font-size: 12px;
+      color: #1a73e8;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .small-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .small-tag {
+      font-size: 12px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #f5f6f8;
+      color: #555;
+      border: 1px solid #e6e9ef;
+    }
+    .section-toggle-row {
+      display: flex;
+      gap: 8px;
+      margin: 10px 12px 0;
+    }
+
+    .ghost-tab-btn {
+      border: 1px solid #d9dee8;
+      background: #f3f4f6;
+      color: #777;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .ghost-tab-btn:hover {
+      background: #e9edf3;
+      color: #444;
+    }
+
+    .ghost-tab-btn.active {
+      background: #e8f0fe;
+      color: #1a73e8;
+      border-color: #c9dcff;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .history-list {
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">Insigh<span>Travel</span> Booking History</div>
+      <div id="status" class="status">예약 내역을 불러오는 중...</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">예약 목록</div>
+
+      <div class="section-toggle-row">
+        <button id="active-bookings-btn" class="ghost-tab-btn active" onclick="showActiveBookings()">현재 예약</button>
+        <button id="cancelled-bookings-btn" class="ghost-tab-btn" onclick="showCancelledBookings()">취소된 예약</button>
+      </div>
+
+      <div id="history-list" class="history-list">
+        <div class="empty">예약 내역이 없습니다.</div>
+      </div>
+    </div>
+
+      <div class="panel">
+        <div class="panel-header">예약 상세</div>
+        <div id="detail-view" class="detail-wrap">
+          <div class="empty">왼쪽에서 예약 내역을 선택해 주세요.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let bookings = [];
+    let cancelledBookings = [];
+    let selectedIndex = -1;
+    let currentTab = "active"; // active | cancelled
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function fmtDate(value) {
+      if (!value) return '-';
+      return String(value).replace(/-/g, '.');
+    }
+
+    function fmtDateTime(value) {
+      if (!value) return '-';
+      return String(value).replace('T', ' ').slice(0, 16);
+    }
+
+    function setStatus(text) {
+      document.getElementById('status').textContent = text;
+    }
+
+
+  async function loadActiveBookings() {
+  setStatus('예약 내역을 불러오는 중...');
+  selectedIndex = -1;
+
+  try {
+    const res = await fetch(`/api/bookings`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    bookings = data.items || [];
+
+    renderCurrentList();
+
+    if (bookings.length > 0) {
+      selectedIndex = 0;
+      renderCurrentList();
+      renderDetail(bookings[0]);
+      setStatus(`총 ${bookings.length}개의 예약 내역`);
+    } else {
+      document.getElementById('detail-view').innerHTML = `<div class="empty">표시할 예약 상세가 없습니다.</div>`;
+      setStatus('예약 내역 없음');
+    }
+  } catch (e) {
+    console.error(e);
+    setStatus(`불러오기 실패 (${e.message})`);
+    document.getElementById('history-list').innerHTML = `<div class="empty">예약 내역이 없습니다.</div>`;
+    document.getElementById('detail-view').innerHTML = `<div class="empty">표시할 예약 상세가 없습니다.</div>`;
+  }
+}
+
+async function loadCancelledBookings() {
+  setStatus('취소된 예약 내역을 불러오는 중...');
+  selectedIndex = -1;
+
+  try {
+    const res = await fetch(`/api/cancelled-bookings`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    cancelledBookings = data.items || [];
+
+    renderCurrentList();
+
+    if (cancelledBookings.length > 0) {
+      selectedIndex = 0;
+      renderCurrentList();
+      renderDetail(cancelledBookings[0]);
+      setStatus(`총 ${cancelledBookings.length}개의 취소된 예약`);
+    } else {
+      document.getElementById('detail-view').innerHTML = `<div class="empty">표시할 예약 상세가 없습니다.</div>`;
+      setStatus('취소된 예약 내역 없음');
+    }
+  } catch (e) {
+    console.error(e);
+    setStatus(`불러오기 실패 (${e.message})`);
+    document.getElementById('history-list').innerHTML = `<div class="empty">예약 내역이 없습니다.</div>`;
+    document.getElementById('detail-view').innerHTML = `<div class="empty">표시할 예약 상세가 없습니다.</div>`;
+  }
+}
+
+    function updateTabButtons() {
+      document.getElementById("active-bookings-btn").classList.toggle("active", currentTab === "active");
+      document.getElementById("cancelled-bookings-btn").classList.toggle("active", currentTab === "cancelled");
+    }
+
+    function showActiveBookings() {
+      currentTab = "active";
+      updateTabButtons();
+      loadActiveBookings();
+    }
+
+    function showCancelledBookings() {
+      currentTab = "cancelled";
+      updateTabButtons();
+      loadCancelledBookings();
+    }
+    function renderCurrentList() {
+      const el = document.getElementById('history-list');
+      const target = currentTab === "active" ? bookings : cancelledBookings;
+
+      if (!target.length) {
+        el.innerHTML = `<div class="empty">${currentTab === "active" ? "예약 내역이 없습니다." : "취소된 예약 내역이 없습니다."}</div>`;
+        return;
+      }
+
+      el.innerHTML = target.map((b, i) => `
+        <div class="history-card ${i === selectedIndex ? 'active' : ''} ${b.status === 'cancelled' ? 'cancelled' : ''}" onclick="selectBooking(${i})">
+          <div class="history-top">
+            <div class="history-title">${escapeHtml(b.title || '예약 내역')}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+              <div class="badge ${escapeHtml(b.booking_type)}">${escapeHtml(b.booking_type)}</div>
+              <div class="badge ${b.status === 'cancelled' ? 'status-cancelled' : 'status-confirmed'}">
+                ${b.status === 'cancelled' ? 'cancelled' : 'confirmed'}
+              </div>
+            </div>
+          </div>
+          <div class="history-meta">
+            예약번호: ${escapeHtml(b.booking_code || '-')}<br>
+            목적지: ${escapeHtml(b.destination || '-')}<br>
+            일정: ${escapeHtml(fmtDate(b.start_date))} ~ ${escapeHtml(fmtDate(b.end_date))}<br>
+            생성일: ${escapeHtml(fmtDateTime(b.created_at))}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function selectBooking(index) {
+      selectedIndex = index;
+      renderCurrentList();
+      const target = currentTab === "active" ? bookings : cancelledBookings;
+      renderDetail(target[index]);
+    }
+
+    async function cancelBooking(bookingCode) {
+      if (!bookingCode) return;
+
+      const ok = confirm(`예약 ${bookingCode}를 취소할까요?`);
+      if (!ok) return;
+
+      try {
+        const res = await fetch(`/api/bookings/${encodeURIComponent(bookingCode)}/cancel`, {
+          method: 'POST'
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          alert(data.message || '예약 취소에 실패했습니다.');
+          return;
+        }
+
+        if (selectedIndex >= 0 && bookings[selectedIndex]) {
+          bookings.splice(selectedIndex, 1);
+        }
+
+        if (currentTab === "active") {
+          if (bookings.length > 0) {
+            selectedIndex = 0;
+            renderCurrentList();
+            renderDetail(bookings[0]);
+          } else {
+            selectedIndex = -1;
+            renderCurrentList();
+            document.getElementById('detail-view').innerHTML =
+              `<div class="empty">표시할 예약 상세가 없습니다.</div>`;
+          }
+        }
+
+      } catch (e) {
+        console.error(e);
+        alert('예약 취소 중 오류가 발생했습니다.');
+      }
+    }
+
+    function renderDetail(booking) {
+      const el = document.getElementById('detail-view');
+      const payload = booking.payload || {};
+      const item = payload.item || {};
+      const passenger = payload.passenger_info || {};
+
+      if (booking.booking_type === 'flight') {
+        const isRoundtrip = !!(item.is_roundtrip || passenger.is_roundtrip);
+
+        el.innerHTML = `
+          <div class="detail-title">${escapeHtml(booking.title || '항공 예약')}</div>
+          <div class="detail-sub">${escapeHtml(booking.destination || '-')} · ${escapeHtml(booking.status || 'confirmed')}</div>
+          <div class="code-box">${escapeHtml(booking.booking_code || '-')}</div>
+
+          <div class="action-row">
+            <button class="cancel-btn"
+              ${booking.status === 'cancelled' ? 'disabled' : ''}
+              onclick="cancelBooking('${escapeHtml(booking.booking_code)}')">
+              ${booking.status === 'cancelled' ? '이미 취소됨' : '예약 취소'}
+            </button>
+          </div>
+
+          <div class="section">
+            <h3>예약 정보</h3>
+            <div class="detail-grid">
+              <div class="detail-label">구간</div>
+              <div class="detail-value">${escapeHtml(item.origin || '-')} → ${escapeHtml(item.destination_kr || item.destination || '-')}</div>
+
+              <div class="detail-label">출국일</div>
+              <div class="detail-value">${escapeHtml(fmtDate(booking.start_date))}</div>
+
+              <div class="detail-label">귀국일</div>
+              <div class="detail-value">${escapeHtml(fmtDate(booking.end_date))}</div>
+
+              <div class="detail-label">항공사</div>
+              <div class="detail-value">${escapeHtml(item.airline || '-')}</div>
+
+              <div class="detail-label">편명</div>
+              <div class="detail-value">${escapeHtml(item.flight_number || '-')}</div>
+
+              <div class="detail-label">가격</div>
+              <div class="detail-value">${escapeHtml(item.price || '-')}</div>
+            </div>
+
+            <div class="small-tags">
+              <span class="small-tag">수하물 ${escapeHtml(item.baggage || '-')}</span>
+              <span class="small-tag">좌석 ${escapeHtml(item.cabin || '-')}</span>
+              <span class="small-tag">${escapeHtml(item.stops || '-')}</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>가는편</h3>
+            <div class="route-box">
+              <div class="route-col">
+                <div class="route-time">${escapeHtml(item.dep_time || '-')}</div>
+                <div class="route-airport">${escapeHtml(item.origin || '-')}</div>
+              </div>
+              <div class="route-center">${escapeHtml(item.duration || '-')}</div>
+              <div class="route-col" style="text-align:right;">
+                <div class="route-time">${escapeHtml(item.dep_arr_time || '-')}</div>
+                <div class="route-airport">${escapeHtml(item.destination_kr || item.destination || '-')}</div>
+              </div>
+            </div>
+          </div>
+
+          ${isRoundtrip ? `
+          <div class="section">
+            <h3>오는편</h3>
+            <div class="route-box">
+              <div class="route-col">
+                <div class="route-time">${escapeHtml(item.ret_dep_time || '-')}</div>
+                <div class="route-airport">${escapeHtml(item.destination_kr || item.destination || '-')}</div>
+              </div>
+              <div class="route-center">${escapeHtml(item.ret_duration || '-')}</div>
+              <div class="route-col" style="text-align:right;">
+                <div class="route-time">${escapeHtml(item.ret_arr_time || '-')}</div>
+                <div class="route-airport">${escapeHtml(item.origin || '-')}</div>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+
+          <div class="section">
+            <h3>탑승객 정보</h3>
+            <div class="detail-grid">
+              <div class="detail-label">이름</div>
+              <div class="detail-value">${escapeHtml(passenger.name || '-')}</div>
+
+              <div class="detail-label">생년월일</div>
+              <div class="detail-value">${escapeHtml(passenger.birth || '-')}</div>
+
+              <div class="detail-label">국적</div>
+              <div class="detail-value">${escapeHtml(passenger.nationality || '-')}</div>
+
+              <div class="detail-label">여권번호</div>
+              <div class="detail-value">${escapeHtml(passenger.passport || '-')}</div>
+
+              <div class="detail-label">이메일</div>
+              <div class="detail-value">${escapeHtml(passenger.email || '-')}</div>
+
+              <div class="detail-label">연락처</div>
+              <div class="detail-value">${escapeHtml(passenger.phone || '-')}</div>
+
+              <div class="detail-label">인원</div>
+              <div class="detail-value">${escapeHtml(passenger.guests || '-')}명</div>
+            </div>
+          </div>
+        `;
+      } else {
+        el.innerHTML = `
+          <div class="detail-title">${escapeHtml(booking.title || '숙소 예약')}</div>
+          <div class="detail-sub">${escapeHtml(booking.destination || '-')} · ${escapeHtml(booking.status || 'confirmed')}</div>
+          <div class="code-box">${escapeHtml(booking.booking_code || '-')}</div>
+
+          <div class="action-row">
+            <button class="cancel-btn"
+              ${booking.status === 'cancelled' ? 'disabled' : ''}
+              onclick="cancelBooking('${escapeHtml(booking.booking_code)}')">
+              ${booking.status === 'cancelled' ? '이미 취소됨' : '예약 취소'}
+            </button>
+          </div>
+
+          <div class="section">
+            <h3>숙소 정보</h3>
+            <div class="detail-grid">
+              <div class="detail-label">숙소명</div>
+              <div class="detail-value">${escapeHtml(item.name || '-')}</div>
+
+              <div class="detail-label">지역</div>
+              <div class="detail-value">${escapeHtml(booking.destination || '-')}</div>
+
+              <div class="detail-label">체크인</div>
+              <div class="detail-value">${escapeHtml(fmtDate(booking.start_date))}</div>
+
+              <div class="detail-label">체크아웃</div>
+              <div class="detail-value">${escapeHtml(fmtDate(booking.end_date))}</div>
+
+              <div class="detail-label">가격</div>
+              <div class="detail-value">${escapeHtml(item.price || '-')}</div>
+
+              <div class="detail-label">평점</div>
+              <div class="detail-value">${escapeHtml(item.rating || '-')}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>투숙객 정보</h3>
+            <div class="detail-grid">
+              <div class="detail-label">이름</div>
+              <div class="detail-value">${escapeHtml(passenger.name || '-')}</div>
+
+              <div class="detail-label">이메일</div>
+              <div class="detail-value">${escapeHtml(passenger.email || '-')}</div>
+
+              <div class="detail-label">연락처</div>
+              <div class="detail-value">${escapeHtml(passenger.phone || '-')}</div>
+
+              <div class="detail-label">인원</div>
+              <div class="detail-value">${escapeHtml(passenger.guests || '-')}명</div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+  window.addEventListener('DOMContentLoaded', () => {
+  updateTabButtons();
+  loadActiveBookings();
+});
+  </script>
+</body>
+</html>

@@ -11,6 +11,7 @@ import planner
 import tools
 from goal_service import extract_trip_goal_from_text
 from prompts import build_context_summary_prompt
+from trip_service import sync_trip_profile_from_goal
 
 load_dotenv()
 
@@ -79,6 +80,8 @@ def goal_node(state: ChatState) -> ChatState:
             previous_goal=prev_goal,
         )
         state["trip_goal"] = new_goal
+        state = sync_trip_profile_from_goal(state)
+        print("[DEBUG] goal_node trip_goal:", state.get("trip_goal"))
     except Exception as e:
         print(f"⚠️ goal_node extraction error: {e}")
         if prev_goal is not None:
@@ -93,7 +96,7 @@ def goal_node(state: ChatState) -> ChatState:
                 "style_tags": [],
                 "status": "just_started",
             }
-
+        state = sync_trip_profile_from_goal(state)
     return state
 
 
@@ -116,6 +119,8 @@ def planner_node(state: ChatState) -> ChatState:
     # 데모 단계에서는 아주 짧게만 넣어도 됨.
     long_term_memory = state.get("long_term_memory") or {}
 
+    memory_context = state.get("memory_context", "")
+
     combined_context = f"""
 [대화 요약]
 {context_summary}
@@ -132,9 +137,12 @@ def planner_node(state: ChatState) -> ChatState:
 [장기 기억(참고용)]
 {json.dumps(long_term_memory, ensure_ascii=False)}
 """.strip()
+   
+
+    print("[DEBUG] planner_node memory_context:", memory_context)
 
     try:
-        plan = planner.plan_tasks(combined_context, latest_user_msg)
+        plan = planner.plan_tasks(combined_context, latest_user_msg, memory_context)
     except Exception as e:
         print(f"⚠️ planner_node error: {e}")
         plan = {
@@ -160,30 +168,87 @@ def planner_node(state: ChatState) -> ChatState:
 
 
 # ---------------------------------------------
-# 4) 장기 기억 게이트 노드 (선택적)
+# 4) 장기 기억 게이트 노드 - 플래너에서 필요한 기억 유형만 선별해서 컨텍스트로 제공
 # ---------------------------------------------
-def memory_gate_node(state: ChatState) -> ChatState:
-    """
-    지금은 main.py에서 long_term_memory를 preload한다고 가정하고,
-    여기서는 tool별로 실제 사용할지 여부만 정리하는 가벼운 노드.
-    """
-    plan = state.get("plan") or {}
-    tools_list = plan.get("tools") or []
-    tool = tools_list[0] if tools_list else "general_chat"
+def memory_gate_node(state):
+    messages = state.get("messages", [])
+    if not messages:
+     return state
 
-    memory_tools = {
-        "trip_ideation",
-        "flight_search",
-        "stay_search",
-        "accommodation_booking",
-        "food_spot_search",
-        "budget_planner",
-        "local_guide",
+    latest_msg = messages[-1]
+    user_message = messages[-1].get("content", "") if isinstance(latest_msg, dict) else getattr(latest_msg, "content", "")
+
+    long_term_memory = state.get("long_term_memory") or {}
+    memories = long_term_memory.get("memories", [])
+
+    selected_types = []
+
+    
+
+    if any(k in user_message for k in ["숙소", "호텔", "리조트", "에어비앤비"]):
+        selected_types = [
+            "stay_preference",
+            "budget_preference", 
+            "travel_style",
+        ]
+
+    elif any(k in user_message for k in ["일정", "코스", "동선", "루트"]):
+        selected_types = [
+            "travel_style",
+            "schedule_preference",
+            "destination_preference",
+        ]
+
+    elif any(k in user_message for k in ["항공", "항공권", " 비행기", "티켓"]):
+        selected_types = [
+            "flight_preference",
+            "budget_preference",
+            "destination_preference",
+        ]
+
+    elif any(k in user_message for k in ["맛집", "카페", "음식", "식당", "먹거리"]):
+        selected_types = [
+            "travel_style",
+            "budget_preference",
+        ]
+
+    elif any(k in user_message for k in ["예산", "비용", "경비", "가성비"]):
+        selected_types = [
+            "budget_preference",
+            "travel_style",
+        ]
+    elif any(k in user_message for k in ["추천", "여행지", "도시", "어디"]):
+        selected_types = [
+            "destination_preference", 
+            "travel_style", 
+            "budget_preference",
+        ]
+
+    else:
+        selected_types = []
+
+    filtered = [
+        m for m in memories
+        if m.get("memory_type") in selected_types
+    ]
+
+    
+    if filtered:
+        memory_context = "[사용자 장기 선호]\n" + "\n".join(
+            f"- {m['content']}" for m in filtered[:5]
+        )
+    else:
+        memory_context = ""
+
+    state["relevant_long_term_memory"] = filtered
+    state["memory_context"] = memory_context
+    state["memory_gate"] = {
+        "use_memory": bool(filtered),
+        "selected_memory_types": selected_types,
     }
 
-    if tool not in memory_tools:
-        state["long_term_memory"] = None
-
+    print("[DEBUG] memory_gate_node - selected_types:", selected_types)
+    print("[DEBUG] memory_context:\n", memory_context)
     return state
 
 
@@ -195,14 +260,15 @@ def tool_node(state: ChatState) -> ChatState:
     context = state.get("context", "") or ""
     weather_data = state.get("weather_data")
     long_term_memory = state.get("long_term_memory")
+    survey = state.get("survey")
 
     try:
-        # tools.py 쪽도 long_term_memory 인자를 받을 수 있게 열어두는 걸 추천
         answer = tools.run_tools_from_plan(
             plan=plan,
             context=context,
             weather_data=weather_data,
             long_term_memory=long_term_memory,
+            survey=survey,
         )
     except TypeError:
         # 아직 tools.py 시그니처를 안 바꿨다면 fallback
