@@ -161,8 +161,11 @@ def run_itinerary_planner_tool(user_message: str, context: str, weather_data=Non
         weather_info_text = f"\n[실시간 날씨 데이터]\n{json.dumps(weather_data, ensure_ascii=False, indent=2)}"
 
     # 4. 최종 프롬프트 구성 및 Gemini 호출
-    user_prompt = build_itinerary_user_prompt(user_message, places_info, weather_info_text, survey=survey)
+   #user_prompt = build_itinerary_user_prompt(user_message, places_info, weather_info_text, survey=survey)
+    # 4. 최종 프롬프트 구성 및 Gemini 호출
+    user_prompt = build_itinerary_user_prompt(context, user_message, places_info, weather_info_text, survey=survey)
     return call_gemini(ITINERARY_SYSTEM, user_prompt, temperature=0.4)
+    #return call_gemini(ITINERARY_SYSTEM, user_prompt, temperature=0.4)
 
 
 # -------------------------------------------------------------------
