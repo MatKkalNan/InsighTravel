@@ -38,6 +38,7 @@ def plan_tasks(planner_context: str, user_message: str, memory_context: str = ""
     """
     # 1) 아주 간단한 rule 기반으로 '완전 여행 밖'인 경우 빠르게 out_of_scope로 처리
     lower = user_message.lower()
+    normalized = lower.strip()
     if any(
         kw in lower
         for kw in [
@@ -52,7 +53,23 @@ def plan_tasks(planner_context: str, user_message: str, memory_context: str = ""
             "trip_stage": "ideation",
             "args": {},
         }
+    # 1.5) 짧은 인사/감탄/단순 응답은 memory_context에 끌려 여행 추천으로 오판되지 않도록 general_chat으로 고정
+    smalltalk_inputs = {
+    "안녕", "안녕하세요", "하이", "ㅎㅇ", "반가워",
+    "고마워", "감사", "감사해", "고맙다",
+    "오케이", "오키", "ㅇㅋ", "응", "네", "넵",
+    "좋아", "좋네", "ㅋㅋ", "ㅎㅎ",
+    "아", "음", "흠", "잠시만", "잠깐만"
+    }
 
+    if normalized in smalltalk_inputs:
+        return {
+            "intent": "general_chat",
+            "tools": ["general_chat"],
+            "subtasks": ["사용자와 자연스럽게 대화를 이어가며 여행 계획을 도울 준비를 한다."],
+            "trip_stage": "ideation",
+            "args": {},
+        }
     # 2) LLM에게 맡겨서 plan JSON 생성
     raw = _call_planner_llm(planner_context, user_message, memory_context)
 

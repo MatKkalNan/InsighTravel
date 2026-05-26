@@ -32,7 +32,7 @@ from booking_page_service import booking_store
 
 # [서비스 레이어]
 from user_service import get_or_create_demo_user
-from conversation_service import save_conversation_message
+from conversation_service import save_conversation_message, load_recent_conversations
 from session_service import load_latest_session_summary, upsert_session_summary
 from trip_service import load_latest_trip, trip_to_state_payload, upsert_trip_from_state
 from memory_service import (
@@ -165,8 +165,19 @@ async def chat(request: ChatRequest):
             limit=10,
         )
 
-        messages = list(request.history) if request.history else []
+        if request.history:
+            messages = list(request.history)
+        else:
+            messages = load_recent_conversations(
+                db=db,
+                user_id=user_id,
+                limit=10,
+            )
+
         messages.append({"role": "user", "content": request.message})
+
+        MAX_HISTORY_MESSAGES = 10
+        messages = messages[-MAX_HISTORY_MESSAGES:]
 
         # 4) user message 저장 (conversation history에 저장 + session summary 업데이트을 위해) -> message_id 반환
         user_row = save_conversation_message(

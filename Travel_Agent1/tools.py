@@ -409,7 +409,11 @@ def transportation_batch(args: dict, context: str = "") -> str:
     args = args or {}
     stops = args.get("stops") or []
     if isinstance(stops, str):
-        stops = [s.strip() for s in stops.split(",") if s.strip()]
+        stops = [
+            s.strip()
+            for s in re.split(r",|→|->|/|>", stops)
+            if s.strip()
+        ]
 
     if not isinstance(stops, list) or len(stops) < 2:
         return (
@@ -689,6 +693,8 @@ def run_tools_from_plan(
         return run_local_guide_tool(user_message, context)
     elif tool == "budget_planner":
         return call_gemini(BUDGET_SYSTEM, f"컨텍스트: {context}\n질문: {user_message}")
+    elif tool == "general_chat":
+        return call_gemini(DEFAULT_AGENT_SYSTEM, f"컨텍스트:\n{context}\n\nUser: {user_message}")
     elif tool == "out_of_scope":
         return run_out_of_scope_tool(user_message, context)
     else:
