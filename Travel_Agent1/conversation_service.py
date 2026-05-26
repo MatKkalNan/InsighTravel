@@ -28,3 +28,26 @@ def save_conversation_message(
     except Exception:
         db.rollback()
         raise
+
+def load_recent_conversations(
+    db: Session,
+    user_id: int,
+    limit: int = 10,
+):
+    rows = (
+        db.query(Conversation)
+        .filter(Conversation.user_id == user_id)
+        .order_by(Conversation.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    rows = list(reversed(rows))
+
+    return [
+        {
+            "role": row.role,
+            "content": row.message,
+        }
+        for row in rows
+    ]
